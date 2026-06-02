@@ -676,6 +676,13 @@ input, select, button { font-family: var(--font-primary); }
 .ai-strip-icon.openrouter { background: rgba(139,92,246,0.12); color: #8b5cf6; }
 .ai-strip-icon.custom-ai { background: rgba(0,212,255,0.12); color: var(--accent-cyan); }
 
+.ai-strip-icon img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
 .ai-strip-status {
   width: 6px; height: 6px;
   border-radius: 50%;
@@ -741,6 +748,13 @@ input, select, button { font-family: var(--font-primary); }
 .ai-provider-icon.large.claude { background: rgba(216,158,68,0.15); color: #d89e44; }
 .ai-provider-icon.large.openrouter { background: rgba(139,92,246,0.15); color: #8b5cf6; }
 .ai-provider-icon.large.custom-ai { background: rgba(0,212,255,0.15); color: var(--accent-cyan); }
+
+.ai-provider-icon.large img {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  border-radius: 6px;
+}
 
 .ai-panel-brand h2 {
   font-size: 22px;
