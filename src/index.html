@@ -214,11 +214,15 @@
       <div class="exchanges-grid">
         <!-- Bybit Card -->
         <div class="exchange-card" data-exchange="bybit">
-          <div class="exchange-logo">
-            <img src="assets/logos/bybit.png" alt="Bybit">
+          <div class="exchange-logo-wrap">
+            <div class="exchange-logo">
+              <img src="assets/logos/bybit.svg" alt="Bybit">
+            </div>
+            <div class="exchange-brand">
+              <h3>Bybit</h3>
+              <p class="exchange-desc">Exchange de criptomoedas com derivativos</p>
+            </div>
           </div>
-          <h3>Bybit</h3>
-          <p class="exchange-desc">Exchange de criptomoedas com derivativos</p>
           <div class="exchange-status" id="bybit-status">
             <span class="status-dot offline"></span> Desconectado
           </div>
@@ -243,11 +247,15 @@
 
         <!-- OKX Card -->
         <div class="exchange-card" data-exchange="okx">
-          <div class="exchange-logo">
-            <img src="assets/logos/okx.png" alt="OKX">
+          <div class="exchange-logo-wrap">
+            <div class="exchange-logo">
+              <img src="assets/logos/okx.svg" alt="OKX">
+            </div>
+            <div class="exchange-brand">
+              <h3>OKX</h3>
+              <p class="exchange-desc">Exchange global de criptomoedas</p>
+            </div>
           </div>
-          <h3>OKX</h3>
-          <p class="exchange-desc">Exchange global de criptomoedas</p>
           <div class="exchange-status" id="okx-status">
             <span class="status-dot offline"></span> Desconectado
           </div>
@@ -276,11 +284,15 @@
 
         <!-- Binance Card -->
         <div class="exchange-card" data-exchange="binance">
-          <div class="exchange-logo">
-            <img src="assets/logos/binance.png" alt="Binance">
+          <div class="exchange-logo-wrap">
+            <div class="exchange-logo">
+              <img src="assets/logos/binance.svg" alt="Binance">
+            </div>
+            <div class="exchange-brand">
+              <h3>Binance</h3>
+              <p class="exchange-desc">Maior exchange de criptomoedas do mundo</p>
+            </div>
           </div>
-          <h3>Binance</h3>
-          <p class="exchange-desc">Maior exchange de criptomoedas do mundo</p>
           <div class="exchange-status" id="binance-status">
             <span class="status-dot offline"></span> Desconectado
           </div>
@@ -305,11 +317,15 @@
 
         <!-- Custom Exchange Card -->
         <div class="exchange-card custom-exchange" data-exchange="custom">
-          <div class="exchange-logo custom-logo">
-            <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          <div class="exchange-logo-wrap">
+            <div class="exchange-logo custom-logo">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            </div>
+            <div class="exchange-brand">
+              <h3>Personalizada</h3>
+              <p class="exchange-desc">Configure qualquer exchange compatível</p>
+            </div>
           </div>
-          <h3>Personalizada</h3>
-          <p class="exchange-desc">Configure qualquer exchange compatível</p>
           <div class="exchange-status" id="custom-status">
             <span class="status-dot offline"></span> Desconectado
           </div>
@@ -339,242 +355,356 @@
       </div>
     </div>
 
-    <!-- AI Config Page -->
+    <!-- AI Config Page - REDESIGNED -->
     <div class="page" id="page-ai-config">
       <div class="page-header">
         <h1>Configuração da IA</h1>
+        <div class="ai-active-badge" id="ai-active-badge">
+          <span class="status-dot offline"></span>
+          <span>Nenhuma IA conectada</span>
+        </div>
       </div>
 
-      <div class="ai-providers-grid">
-        <!-- DeepSeek -->
-        <div class="ai-card" data-provider="deepseek">
-          <div class="ai-card-header">
-            <div class="ai-provider-icon deepseek">
-              <span>DS</span>
+      <!-- Provider Selector Strip -->
+      <div class="ai-provider-strip">
+        <div class="ai-strip-item active" data-provider="deepseek" onclick="selectAIProvider('deepseek')">
+          <div class="ai-strip-icon deepseek">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+          </div>
+          <span>DeepSeek</span>
+          <span class="ai-strip-status" id="strip-status-deepseek"></span>
+        </div>
+        <div class="ai-strip-item" data-provider="openai" onclick="selectAIProvider('openai')">
+          <div class="ai-strip-icon openai">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+          </div>
+          <span>OpenAI</span>
+          <span class="ai-strip-status" id="strip-status-openai"></span>
+        </div>
+        <div class="ai-strip-item" data-provider="google" onclick="selectAIProvider('google')">
+          <div class="ai-strip-icon google">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg>
+          </div>
+          <span>Google AI</span>
+          <span class="ai-strip-status" id="strip-status-google"></span>
+        </div>
+        <div class="ai-strip-item" data-provider="nvidia" onclick="selectAIProvider('nvidia')">
+          <div class="ai-strip-icon nvidia">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+          </div>
+          <span>NVIDIA</span>
+          <span class="ai-strip-status" id="strip-status-nvidia"></span>
+        </div>
+        <div class="ai-strip-item" data-provider="claude" onclick="selectAIProvider('claude')">
+          <div class="ai-strip-icon claude">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16z"/></svg>
+          </div>
+          <span>Claude</span>
+          <span class="ai-strip-status" id="strip-status-claude"></span>
+        </div>
+        <div class="ai-strip-item" data-provider="openrouter" onclick="selectAIProvider('openrouter')">
+          <div class="ai-strip-icon openrouter">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h16v16H4z"/></svg>
+          </div>
+          <span>OpenRouter</span>
+          <span class="ai-strip-status" id="strip-status-openrouter"></span>
+        </div>
+        <div class="ai-strip-item" data-provider="custom" onclick="selectAIProvider('custom')">
+          <div class="ai-strip-icon custom-ai">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          </div>
+          <span>Custom</span>
+          <span class="ai-strip-status" id="strip-status-custom"></span>
+        </div>
+      </div>
+
+      <!-- Provider Config Panel -->
+      <div class="ai-config-panel">
+        <!-- DeepSeek Config -->
+        <div class="ai-provider-panel active" id="panel-deepseek">
+          <div class="ai-panel-header">
+            <div class="ai-panel-brand">
+              <div class="ai-provider-icon large deepseek"><span>DS</span></div>
+              <div>
+                <h2>DeepSeek</h2>
+                <p>Modelo de IA avançado com raciocínio profundo. Ideal para análise de mercado complexa.</p>
+              </div>
             </div>
-            <div>
-              <h3>DeepSeek</h3>
-              <p>Modelo de IA avançado</p>
+            <div class="ai-panel-status" id="panel-status-deepseek">
+              <span class="badge">Desconectado</span>
             </div>
           </div>
-          <div class="ai-card-body">
-            <div class="form-group">
-              <label>API Key</label>
-              <input type="password" id="deepseek-apikey" placeholder="sk-...">
+          <div class="ai-panel-body">
+            <div class="ai-config-grid">
+              <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="deepseek-apikey" placeholder="sk-...">
+              </div>
+              <div class="form-group">
+                <label>Modelo</label>
+                <select id="deepseek-model">
+                  <option value="deepseek-chat">DeepSeek Chat</option>
+                  <option value="deepseek-reasoner">DeepSeek Reasoner</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Temperatura: <span class="temp-val" id="deepseek-temp-val">0.3</span></label>
+                <input type="range" id="deepseek-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('deepseek-temp-val').textContent=this.value">
+              </div>
             </div>
-            <div class="form-group">
-              <label>Modelo</label>
-              <select id="deepseek-model">
-                <option value="deepseek-chat">DeepSeek Chat</option>
-                <option value="deepseek-reasoner">DeepSeek Reasoner</option>
-              </select>
+            <div class="ai-panel-actions">
+              <button class="btn btn-primary" onclick="connectAI('deepseek')">Conectar DeepSeek</button>
+              <button class="btn btn-outline" onclick="testAIConnection('deepseek')">Testar Conexão</button>
             </div>
-            <div class="form-group">
-              <label>Temperatura: <span id="deepseek-temp-val">0.3</span></label>
-              <input type="range" id="deepseek-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('deepseek-temp-val').textContent=this.value">
-            </div>
-            <button class="btn btn-primary btn-block" onclick="connectAI('deepseek')">Conectar</button>
           </div>
         </div>
 
-        <!-- OpenAI -->
-        <div class="ai-card" data-provider="openai">
-          <div class="ai-card-header">
-            <div class="ai-provider-icon openai">
-              <span>OAI</span>
+        <!-- OpenAI Config -->
+        <div class="ai-provider-panel" id="panel-openai">
+          <div class="ai-panel-header">
+            <div class="ai-panel-brand">
+              <div class="ai-provider-icon large openai"><span>OA</span></div>
+              <div>
+                <h2>OpenAI</h2>
+                <p>GPT-4o e modelos avançados. Alta precisão para análise financeira e predições de mercado.</p>
+              </div>
             </div>
-            <div>
-              <h3>OpenAI</h3>
-              <p>GPT-4 e outros modelos</p>
-            </div>
-          </div>
-          <div class="ai-card-body">
-            <div class="form-group">
-              <label>API Key</label>
-              <input type="password" id="openai-apikey" placeholder="sk-...">
-            </div>
-            <div class="form-group">
-              <label>Modelo</label>
-              <select id="openai-model">
-                <option value="gpt-4o">GPT-4o</option>
-                <option value="gpt-4o-mini">GPT-4o Mini</option>
-                <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                <option value="o1-preview">o1 Preview</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Temperatura: <span id="openai-temp-val">0.3</span></label>
-              <input type="range" id="openai-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('openai-temp-val').textContent=this.value">
-            </div>
-            <button class="btn btn-primary btn-block" onclick="connectAI('openai')">Conectar</button>
-          </div>
-        </div>
-
-        <!-- Google -->
-        <div class="ai-card" data-provider="google">
-          <div class="ai-card-header">
-            <div class="ai-provider-icon google">
-              <span>G</span>
-            </div>
-            <div>
-              <h3>Google AI</h3>
-              <p>Gemini Pro e Flash</p>
+            <div class="ai-panel-status" id="panel-status-openai">
+              <span class="badge">Desconectado</span>
             </div>
           </div>
-          <div class="ai-card-body">
-            <div class="form-group">
-              <label>API Key</label>
-              <input type="password" id="google-apikey" placeholder="AIza...">
+          <div class="ai-panel-body">
+            <div class="ai-config-grid">
+              <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="openai-apikey" placeholder="sk-...">
+              </div>
+              <div class="form-group">
+                <label>Modelo</label>
+                <select id="openai-model">
+                  <option value="gpt-4o">GPT-4o</option>
+                  <option value="gpt-4o-mini">GPT-4o Mini</option>
+                  <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                  <option value="o1-preview">o1 Preview</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Temperatura: <span class="temp-val" id="openai-temp-val">0.3</span></label>
+                <input type="range" id="openai-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('openai-temp-val').textContent=this.value">
+              </div>
             </div>
-            <div class="form-group">
-              <label>Modelo</label>
-              <select id="google-model">
-                <option value="gemini-pro">Gemini Pro</option>
-                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
-                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
-              </select>
+            <div class="ai-panel-actions">
+              <button class="btn btn-primary" onclick="connectAI('openai')">Conectar OpenAI</button>
+              <button class="btn btn-outline" onclick="testAIConnection('openai')">Testar Conexão</button>
             </div>
-            <div class="form-group">
-              <label>Temperatura: <span id="google-temp-val">0.3</span></label>
-              <input type="range" id="google-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('google-temp-val').textContent=this.value">
-            </div>
-            <button class="btn btn-primary btn-block" onclick="connectAI('google')">Conectar</button>
           </div>
         </div>
 
-        <!-- NVIDIA -->
-        <div class="ai-card" data-provider="nvidia">
-          <div class="ai-card-header">
-            <div class="ai-provider-icon nvidia">
-              <span>NV</span>
+        <!-- Google Config -->
+        <div class="ai-provider-panel" id="panel-google">
+          <div class="ai-panel-header">
+            <div class="ai-panel-brand">
+              <div class="ai-provider-icon large google"><span>G</span></div>
+              <div>
+                <h2>Google AI</h2>
+                <p>Gemini Pro e Flash. Rápido e eficiente para análise em tempo real com multimodalidade.</p>
+              </div>
             </div>
-            <div>
-              <h3>NVIDIA AI</h3>
-              <p>NIM API Foundation Models</p>
-            </div>
-          </div>
-          <div class="ai-card-body">
-            <div class="form-group">
-              <label>API Key</label>
-              <input type="password" id="nvidia-apikey" placeholder="nvapi-...">
-            </div>
-            <div class="form-group">
-              <label>Modelo</label>
-              <select id="nvidia-model">
-                <option value="meta/llama-3.1-405b-instruct">Llama 3.1 405B</option>
-                <option value="meta/llama-3.1-70b-instruct">Llama 3.1 70B</option>
-                <option value="nvidia/llama-3.1-nemotron-70b-instruct">Nemotron 70B</option>
-                <option value="mistralai/mixtral-8x22b-instruct-v0.1">Mixtral 8x22B</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Temperatura: <span id="nvidia-temp-val">0.3</span></label>
-              <input type="range" id="nvidia-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('nvidia-temp-val').textContent=this.value">
-            </div>
-            <button class="btn btn-primary btn-block" onclick="connectAI('nvidia')">Conectar</button>
-          </div>
-        </div>
-
-        <!-- Claude -->
-        <div class="ai-card" data-provider="claude">
-          <div class="ai-card-header">
-            <div class="ai-provider-icon claude">
-              <span>CL</span>
-            </div>
-            <div>
-              <h3>Claude (Anthropic)</h3>
-              <p>Modelo avançado de raciocínio</p>
+            <div class="ai-panel-status" id="panel-status-google">
+              <span class="badge">Desconectado</span>
             </div>
           </div>
-          <div class="ai-card-body">
-            <div class="form-group">
-              <label>API Key</label>
-              <input type="password" id="claude-apikey" placeholder="sk-ant-...">
+          <div class="ai-panel-body">
+            <div class="ai-config-grid">
+              <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="google-apikey" placeholder="AIza...">
+              </div>
+              <div class="form-group">
+                <label>Modelo</label>
+                <select id="google-model">
+                  <option value="gemini-pro">Gemini Pro</option>
+                  <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                  <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Temperatura: <span class="temp-val" id="google-temp-val">0.3</span></label>
+                <input type="range" id="google-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('google-temp-val').textContent=this.value">
+              </div>
             </div>
-            <div class="form-group">
-              <label>Modelo</label>
-              <select id="claude-model">
-                <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
-                <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
-                <option value="claude-3-opus-20240229">Claude 3 Opus</option>
-                <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
-              </select>
+            <div class="ai-panel-actions">
+              <button class="btn btn-primary" onclick="connectAI('google')">Conectar Google AI</button>
+              <button class="btn btn-outline" onclick="testAIConnection('google')">Testar Conexão</button>
             </div>
-            <div class="form-group">
-              <label>Temperatura: <span id="claude-temp-val">0.3</span></label>
-              <input type="range" id="claude-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('claude-temp-val').textContent=this.value">
-            </div>
-            <button class="btn btn-primary btn-block" onclick="connectAI('claude')">Conectar</button>
           </div>
         </div>
 
-        <!-- OpenRouter -->
-        <div class="ai-card" data-provider="openrouter">
-          <div class="ai-card-header">
-            <div class="ai-provider-icon openrouter">
-              <span>OR</span>
+        <!-- NVIDIA Config -->
+        <div class="ai-provider-panel" id="panel-nvidia">
+          <div class="ai-panel-header">
+            <div class="ai-panel-brand">
+              <div class="ai-provider-icon large nvidia"><span>NV</span></div>
+              <div>
+                <h2>NVIDIA AI</h2>
+                <p>NIM API Foundation Models. Llama, Nemotron e Mixtral otimizados com GPU NVIDIA.</p>
+              </div>
             </div>
-            <div>
-              <h3>OpenRouter</h3>
-              <p>Acesso a múltiplos modelos</p>
+            <div class="ai-panel-status" id="panel-status-nvidia">
+              <span class="badge">Desconectado</span>
             </div>
           </div>
-          <div class="ai-card-body">
-            <div class="form-group">
-              <label>API Key</label>
-              <input type="password" id="openrouter-apikey" placeholder="sk-or-...">
+          <div class="ai-panel-body">
+            <div class="ai-config-grid">
+              <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="nvidia-apikey" placeholder="nvapi-...">
+              </div>
+              <div class="form-group">
+                <label>Modelo</label>
+                <select id="nvidia-model">
+                  <option value="meta/llama-3.1-405b-instruct">Llama 3.1 405B</option>
+                  <option value="meta/llama-3.1-70b-instruct">Llama 3.1 70B</option>
+                  <option value="nvidia/llama-3.1-nemotron-70b-instruct">Nemotron 70B</option>
+                  <option value="mistralai/mixtral-8x22b-instruct-v0.1">Mixtral 8x22B</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Temperatura: <span class="temp-val" id="nvidia-temp-val">0.3</span></label>
+                <input type="range" id="nvidia-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('nvidia-temp-val').textContent=this.value">
+              </div>
             </div>
-            <div class="form-group">
-              <label>Modelo</label>
-              <select id="openrouter-model">
-                <option value="openai/gpt-4o">GPT-4o</option>
-                <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
-                <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
-                <option value="meta-llama/llama-3.1-405b-instruct">Llama 3.1 405B</option>
-                <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
-              </select>
+            <div class="ai-panel-actions">
+              <button class="btn btn-primary" onclick="connectAI('nvidia')">Conectar NVIDIA AI</button>
+              <button class="btn btn-outline" onclick="testAIConnection('nvidia')">Testar Conexão</button>
             </div>
-            <div class="form-group">
-              <label>Temperatura: <span id="openrouter-temp-val">0.3</span></label>
-              <input type="range" id="openrouter-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('openrouter-temp-val').textContent=this.value">
-            </div>
-            <button class="btn btn-primary btn-block" onclick="connectAI('openrouter')">Conectar</button>
           </div>
         </div>
 
-        <!-- Custom AI -->
-        <div class="ai-card" data-provider="custom">
-          <div class="ai-card-header">
-            <div class="ai-provider-icon custom-ai">
-              <span>+</span>
+        <!-- Claude Config -->
+        <div class="ai-provider-panel" id="panel-claude">
+          <div class="ai-panel-header">
+            <div class="ai-panel-brand">
+              <div class="ai-provider-icon large claude"><span>CL</span></div>
+              <div>
+                <h2>Claude (Anthropic)</h2>
+                <p>Modelo avançado de raciocínio. Excelente para análise de risco e decisões de investimento.</p>
+              </div>
             </div>
-            <div>
-              <h3>Personalizada</h3>
-              <p>Qualquer API OpenAI-compatible</p>
+            <div class="ai-panel-status" id="panel-status-claude">
+              <span class="badge">Desconectado</span>
             </div>
           </div>
-          <div class="ai-card-body">
-            <div class="form-group">
-              <label>Nome do Provedor</label>
-              <input type="text" id="custom-ai-name" placeholder="Ex: Groq, Together AI...">
+          <div class="ai-panel-body">
+            <div class="ai-config-grid">
+              <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="claude-apikey" placeholder="sk-ant-...">
+              </div>
+              <div class="form-group">
+                <label>Modelo</label>
+                <select id="claude-model">
+                  <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                  <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                  <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                  <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Temperatura: <span class="temp-val" id="claude-temp-val">0.3</span></label>
+                <input type="range" id="claude-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('claude-temp-val').textContent=this.value">
+              </div>
             </div>
-            <div class="form-group">
-              <label>URL Base da API</label>
-              <input type="url" id="custom-ai-baseurl" placeholder="https://api.example.com/v1">
+            <div class="ai-panel-actions">
+              <button class="btn btn-primary" onclick="connectAI('claude')">Conectar Claude</button>
+              <button class="btn btn-outline" onclick="testAIConnection('claude')">Testar Conexão</button>
             </div>
-            <div class="form-group">
-              <label>API Key</label>
-              <input type="password" id="custom-ai-apikey" placeholder="Sua API Key">
+          </div>
+        </div>
+
+        <!-- OpenRouter Config -->
+        <div class="ai-provider-panel" id="panel-openrouter">
+          <div class="ai-panel-header">
+            <div class="ai-panel-brand">
+              <div class="ai-provider-icon large openrouter"><span>OR</span></div>
+              <div>
+                <h2>OpenRouter</h2>
+                <p>Acesso unificado a múltiplos modelos. Troque entre GPT-4, Claude, Gemini e mais.</p>
+              </div>
             </div>
-            <div class="form-group">
-              <label>Modelo</label>
-              <input type="text" id="custom-ai-model" placeholder="nome-do-modelo">
+            <div class="ai-panel-status" id="panel-status-openrouter">
+              <span class="badge">Desconectado</span>
             </div>
-            <div class="form-group">
-              <label>Temperatura: <span id="custom-ai-temp-val">0.3</span></label>
-              <input type="range" id="custom-ai-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('custom-ai-temp-val').textContent=this.value">
+          </div>
+          <div class="ai-panel-body">
+            <div class="ai-config-grid">
+              <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="openrouter-apikey" placeholder="sk-or-...">
+              </div>
+              <div class="form-group">
+                <label>Modelo</label>
+                <select id="openrouter-model">
+                  <option value="openai/gpt-4o">GPT-4o</option>
+                  <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+                  <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
+                  <option value="meta-llama/llama-3.1-405b-instruct">Llama 3.1 405B</option>
+                  <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Temperatura: <span class="temp-val" id="openrouter-temp-val">0.3</span></label>
+                <input type="range" id="openrouter-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('openrouter-temp-val').textContent=this.value">
+              </div>
             </div>
-            <button class="btn btn-primary btn-block" onclick="connectAI('custom')">Conectar</button>
+            <div class="ai-panel-actions">
+              <button class="btn btn-primary" onclick="connectAI('openrouter')">Conectar OpenRouter</button>
+              <button class="btn btn-outline" onclick="testAIConnection('openrouter')">Testar Conexão</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom AI Config -->
+        <div class="ai-provider-panel" id="panel-custom">
+          <div class="ai-panel-header">
+            <div class="ai-panel-brand">
+              <div class="ai-provider-icon large custom-ai"><span>+</span></div>
+              <div>
+                <h2>API Personalizada</h2>
+                <p>Configure qualquer API compatível com o formato OpenAI. Groq, Together AI, Ollama e mais.</p>
+              </div>
+            </div>
+            <div class="ai-panel-status" id="panel-status-custom">
+              <span class="badge">Desconectado</span>
+            </div>
+          </div>
+          <div class="ai-panel-body">
+            <div class="ai-config-grid">
+              <div class="form-group">
+                <label>Nome do Provedor</label>
+                <input type="text" id="custom-ai-name" placeholder="Ex: Groq, Together AI...">
+              </div>
+              <div class="form-group">
+                <label>URL Base da API</label>
+                <input type="url" id="custom-ai-baseurl" placeholder="https://api.example.com/v1">
+              </div>
+              <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="custom-ai-apikey" placeholder="Sua API Key">
+              </div>
+              <div class="form-group">
+                <label>Modelo</label>
+                <input type="text" id="custom-ai-model" placeholder="nome-do-modelo">
+              </div>
+              <div class="form-group">
+                <label>Temperatura: <span class="temp-val" id="custom-ai-temp-val">0.3</span></label>
+                <input type="range" id="custom-ai-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('custom-ai-temp-val').textContent=this.value">
+              </div>
+            </div>
+            <div class="ai-panel-actions">
+              <button class="btn btn-primary" onclick="connectAI('custom')">Conectar API Custom</button>
+              <button class="btn btn-outline" onclick="testAIConnection('custom')">Testar Conexão</button>
+            </div>
           </div>
         </div>
       </div>
@@ -583,6 +713,7 @@
       <div class="card card-full" style="margin-top: 24px;">
         <div class="card-header">
           <h3>Configuração de Requisições à IA</h3>
+          <span class="badge info">Sistema</span>
         </div>
         <div class="card-body">
           <div class="request-config">

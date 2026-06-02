@@ -153,6 +153,66 @@ async function loadBalance(exchange) {
   }
 }
 
+// ===== AI Provider Selection (NEW) =====
+function selectAIProvider(provider) {
+  document.querySelectorAll('.ai-strip-item').forEach(i => i.classList.remove('active'));
+  document.querySelectorAll('.ai-provider-panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.ai-strip-item[data-provider="${provider}"]`)?.classList.add('active');
+  document.getElementById(`panel-${provider}`)?.classList.add('active');
+}
+
+async function testAIConnection(provider) {
+  const config = getAIConfig(provider);
+  if (!config.apiKey) {
+    showToast('Preencha a API Key para testar', 'warning');
+    return;
+  }
+
+  showToast(`Testando conexão com ${provider}...`, 'info');
+  addLog('info', `Testando conexão com ${provider}...`);
+
+  try {
+    const result = await window.electronAPI.aiTestConnection(config);
+    if (result.success) {
+      showToast(`Conexão com ${provider} OK!`, 'success');
+      addLog('success', `Teste de conexão com ${provider} OK`);
+    } else {
+      showToast(`Teste falhou: ${result.error}`, 'error');
+      addLog('error', `Teste com ${provider} falhou: ${result.error}`);
+    }
+  } catch (err) {
+    showToast(`Erro no teste: ${err.message}`, 'error');
+  }
+}
+
+function updateAIStatusUI(provider, connected) {
+  // Update strip status dot
+  const stripStatus = document.getElementById(`strip-status-${provider}`);
+  if (stripStatus) {
+    stripStatus.className = `ai-strip-status ${connected ? 'connected' : ''}`;
+  }
+
+  // Update panel status badge
+  const panelStatus = document.getElementById(`panel-status-${provider}`);
+  if (panelStatus) {
+    panelStatus.innerHTML = connected
+      ? `<span class="badge success">Conectado</span>`
+      : `<span class="badge">Desconectado</span>`;
+  }
+
+  // Update active badge in header
+  const activeBadge = document.getElementById('ai-active-badge');
+  if (activeBadge && connected) {
+    activeBadge.innerHTML = `<span class="status-dot online"></span><span>${provider} conectado</span>`;
+  }
+
+  // Update dashboard badge
+  if (connected) {
+    document.getElementById('ai-status-badge').textContent = provider;
+    document.getElementById('ai-status-badge').className = 'badge success';
+  }
+}
+
 // ===== AI Management =====
 async function connectAI(provider) {
   const config = getAIConfig(provider);
@@ -172,15 +232,16 @@ async function connectAI(provider) {
       saveConfig();
       showToast(`IA ${provider} conectada com sucesso!`, 'success');
       addLog('success', `IA ${provider} conectada`);
-      document.getElementById('ai-status-badge').textContent = provider;
-      document.getElementById('ai-status-badge').className = 'badge success';
+      updateAIStatusUI(provider, true);
     } else {
       showToast(`Erro: ${result.error}`, 'error');
       addLog('error', `Falha na conexão com IA ${provider}: ${result.error}`);
+      updateAIStatusUI(provider, false);
     }
   } catch (err) {
     showToast(`Erro: ${err.message}`, 'error');
     addLog('error', `Exceção ao conectar IA ${provider}: ${err.message}`);
+    updateAIStatusUI(provider, false);
   }
 }
 
