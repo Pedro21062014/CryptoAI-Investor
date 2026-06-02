@@ -1349,3 +1349,107 @@ input, select, button { font-family: var(--font-primary); }
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
+
+/* ===== Analysis Symbol Tag ===== */
+.analysis-symbol-tag {
+  padding: 4px 12px;
+  background: rgba(139,92,246,0.1);
+  border: 1px solid rgba(139,92,246,0.2);
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-purple);
+  font-family: var(--font-mono);
+  letter-spacing: 0.5px;
+}
+
+/* ===== Analysis History Items ===== */
+.analysis-history-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--table-border);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.analysis-history-item:hover {
+  background: var(--table-row-hover);
+}
+
+.analysis-history-item:last-child {
+  border-bottom: none;
+}
+
+.analysis-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.analysis-history-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.analysis-history-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.recommendation-badge-sm {
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.recommendation-badge-sm.BUY { background: rgba(16,185,129,0.15); color: var(--accent-green); border: 1px solid rgba(16,185,129,0.3); }
+.recommendation-badge-sm.SELL { background: rgba(239,68,68,0.15); color: var(--accent-red); border: 1px solid rgba(239,68,68,0.3); }
+.recommendation-badge-sm.HOLD { background: rgba(245,158,11,0.15); color: var(--accent-orange); border: 1px solid rgba(245,158,11,0.3); }
+
+.analysis-history-symbol {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+}
+
+.analysis-history-provider {
+  font-size: 10px !important;
+}
+
+.analysis-history-confidence {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.analysis-history-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.analysis-history-detail {
+  padding: 8px 0;
+  border-top: 1px solid var(--table-border);
+  margin-top: 8px;
+  animation: fadeIn 0.2s ease;
+}
+
+[data-theme="light"] .analysis-history-item:hover {
+  background: rgba(0,180,216,0.04);
+}
+
+[data-theme="light"] .analysis-history-detail .analysis-detail {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .analysis-history-detail .analysis-reasoning {
+  background: #f8fafc;
+}

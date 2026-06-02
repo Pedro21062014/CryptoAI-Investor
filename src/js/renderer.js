@@ -18,6 +18,7 @@ const state = {
   },
   analysisInterval: null,
   trades: [],
+  analysisHistory: [],
   aiMetrics: {
     requestCount: 0,
     tokensUsed: 0,
@@ -38,6 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   loadSavedConfig();
   loadSavedTheme();
+  loadAnalysisHistory();
   addLog('info', 'Aplicativo iniciado com sucesso');
 });
 
@@ -376,6 +378,8 @@ async function runAnalysisCycle() {
     );
 
     if (analysisResult.success) {
+      // Include symbol info in analysis for history tracking
+      analysisResult.analysis.symbol = pairList.join(', ');
       displayAnalysis(analysisResult.analysis, analysisResult.raw);
       addLog('success', `Análise concluída: ${analysisResult.analysis.recommendation}`);
       updateAIMetrics(analysisResult.raw ? analysisResult.raw.split(' ').length * 1.3 : 500);
@@ -424,11 +428,41 @@ function displayAnalysis(analysis, raw) {
   const rec = analysis.recommendation || 'HOLD';
   const confidence = analysis.confidence || 50;
   const risk = analysis.risk_level || 'MEDIUM';
+  const symbol = analysis.symbol || 'BTCUSDT';
+  const timestamp = new Date();
 
+  // Save to analysis history
+  const historyEntry = {
+    id: Date.now(),
+    timestamp: timestamp,
+    symbol: symbol,
+    recommendation: rec,
+    confidence: confidence,
+    risk_level: risk,
+    sentiment: analysis.sentiment || 'neutral',
+    entry_price: analysis.entry_price || null,
+    target_price: analysis.target_price || null,
+    stop_loss: analysis.stop_loss || null,
+    timeframe: analysis.timeframe || 'medium',
+    reasoning: analysis.reasoning || 'Sem detalhes disponíveis',
+    factors: analysis.factors || [],
+    provider: state.activeAI || 'unknown'
+  };
+  state.analysisHistory.unshift(historyEntry);
+  // Keep max 200 entries
+  if (state.analysisHistory.length > 200) {
+    state.analysisHistory = state.analysisHistory.slice(0, 200);
+  }
+  saveAnalysisHistory();
+
+  // Show latest analysis at top
   container.innerHTML = `
     <div class="analysis-result">
       <div class="analysis-header">
-        <span class="recommendation-badge ${rec}">${rec}</span>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="recommendation-badge ${rec}">${rec}</span>
+          <span class="analysis-symbol-tag">${symbol}</span>
+        </div>
         <span class="badge ${risk === 'LOW' ? 'success' : risk === 'HIGH' || risk === 'EXTREME' ? 'error' : 'warning'}">
           Risco: ${risk}
         </span>
@@ -470,6 +504,9 @@ function displayAnalysis(analysis, raw) {
     </div>
   `;
 
+  // Update the analysis history list on the dashboard
+  updateAnalysisHistoryUI();
+
   // Also update trade recommendation sidebar
   const tradeRec = document.getElementById('ai-trade-recommendation');
   if (tradeRec) {
@@ -489,6 +526,127 @@ function displayAnalysis(analysis, raw) {
         <p style="font-size:12px; color:var(--text-muted); margin-top:12px; line-height:1.5">${(analysis.reasoning || '').substring(0, 200)}...</p>
       </div>
     `;
+  }
+}
+
+// ===== Analysis History =====
+function updateAnalysisHistoryUI() {
+  const container = document.getElementById('analysis-history-body');
+  if (!container) return;
+
+  if (state.analysisHistory.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>Nenhuma análise realizada ainda</p></div>';
+    return;
+  }
+
+  // Update count badge
+  const countBadge = document.getElementById('analysis-count-badge');
+  if (countBadge) {
+    countBadge.textContent = `${state.analysisHistory.length} análises`;
+    countBadge.className = 'badge info';
+  }
+
+  container.innerHTML = state.analysisHistory.map(entry => {
+    const rec = entry.recommendation || 'HOLD';
+    const risk = entry.risk_level || 'MEDIUM';
+    const time = entry.timestamp instanceof Date
+      ? entry.timestamp.toLocaleString('pt-BR')
+      : new Date(entry.timestamp).toLocaleString('pt-BR');
+    return `
+      <div class="analysis-history-item" onclick="toggleAnalysisDetail(${entry.id})">
+        <div class="analysis-history-row">
+          <div class="analysis-history-left">
+            <span class="recommendation-badge-sm ${rec}">${rec}</span>
+            <span class="analysis-history-symbol">${entry.symbol}</span>
+            <span class="analysis-history-provider badge info">${entry.provider}</span>
+          </div>
+          <div class="analysis-history-right">
+            <span class="analysis-history-confidence" style="color: ${entry.confidence > 70 ? 'var(--accent-green)' : entry.confidence > 40 ? 'var(--accent-orange)' : 'var(--accent-red)'}">${entry.confidence}%</span>
+            <span class="badge ${risk === 'LOW' ? 'success' : risk === 'HIGH' || risk === 'EXTREME' ? 'error' : 'warning'}" style="font-size:10px">${risk}</span>
+            <span class="analysis-history-time">${time}</span>
+          </div>
+        </div>
+        <div class="analysis-history-detail" id="analysis-detail-${entry.id}" style="display:none;">
+          <div class="analysis-details" style="margin-top:12px;">
+            <div class="analysis-detail">
+              <div class="analysis-detail-label">Sentimento</div>
+              <div class="analysis-detail-value">${(entry.sentiment || 'neutral').toUpperCase()}</div>
+            </div>
+            <div class="analysis-detail">
+              <div class="analysis-detail-label">Entrada</div>
+              <div class="analysis-detail-value">${entry.entry_price ? '$' + entry.entry_price.toLocaleString() : 'N/A'}</div>
+            </div>
+            <div class="analysis-detail">
+              <div class="analysis-detail-label">Target</div>
+              <div class="analysis-detail-value">${entry.target_price ? '$' + entry.target_price.toLocaleString() : 'N/A'}</div>
+            </div>
+            <div class="analysis-detail">
+              <div class="analysis-detail-label">Stop Loss</div>
+              <div class="analysis-detail-value" style="color:var(--accent-red)">${entry.stop_loss ? '$' + entry.stop_loss.toLocaleString() : 'N/A'}</div>
+            </div>
+            <div class="analysis-detail">
+              <div class="analysis-detail-label">Timeframe</div>
+              <div class="analysis-detail-value">${(entry.timeframe || 'medium').toUpperCase()}</div>
+            </div>
+            <div class="analysis-detail">
+              <div class="analysis-detail-label">Risco</div>
+              <div class="analysis-detail-value">${risk}</div>
+            </div>
+          </div>
+          <div class="analysis-reasoning" style="margin-top:10px;">
+            <strong>Raciocínio:</strong> ${entry.reasoning}
+          </div>
+          ${entry.factors && entry.factors.length > 0 ? `
+            <div class="analysis-factors" style="margin-top:8px;">
+              ${entry.factors.map(f => `<span class="factor-tag">${f}</span>`).join('')}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleAnalysisDetail(id) {
+  const detail = document.getElementById(`analysis-detail-${id}`);
+  if (detail) {
+    detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
+function clearAnalysisHistory() {
+  if (confirm('Tem certeza que deseja limpar todo o histórico de análises?')) {
+    state.analysisHistory = [];
+    saveAnalysisHistory();
+    updateAnalysisHistoryUI();
+    // Reset dashboard analysis view
+    document.getElementById('ai-analysis-content').innerHTML = `
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93V12h2.75a3.5 3.5 0 0 1 3.5 3.5v1.75c1.85.35 3.25 1.98 3.25 3.93a4 4 0 1 1-7-2.64V15.5a.5.5 0 0 0-.5-.5h-5.5a.5.5 0 0 0-.5.5v3.04a4 4 0 1 1-2 0V15.5a3.5 3.5 0 0 1 3.5-3.5h2.75V9.93A4.002 4.002 0 0 1 12 2z"/></svg>
+        <p>Configure a IA e inicie o bot para ver análises</p>
+      </div>
+    `;
+    showToast('Histórico de análises limpo', 'success');
+  }
+}
+
+function saveAnalysisHistory() {
+  try {
+    localStorage.setItem('cryptoai-analysis-history', JSON.stringify(state.analysisHistory));
+  } catch (e) {
+    // Ignore storage errors
+  }
+}
+
+function loadAnalysisHistory() {
+  try {
+    const saved = localStorage.getItem('cryptoai-analysis-history');
+    if (saved) {
+      state.analysisHistory = JSON.parse(saved);
+      updateAnalysisHistoryUI();
+    }
+  } catch (e) {
+    // Ignore
   }
 }
 
