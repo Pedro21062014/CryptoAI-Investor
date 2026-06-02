@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,7 +12,7 @@
   <div id="titlebar">
     <div class="titlebar-drag">
       <div class="titlebar-icon">
-        <img src="assets/logos/../../build/icon.png" alt="CryptoAI" id="app-icon">
+        <img src="../build/icon.png" alt="CryptoAI" id="app-icon">
       </div>
       <span class="titlebar-title">CryptoAI Investor</span>
     </div>
@@ -97,7 +97,12 @@
     <div class="page active" id="page-dashboard">
       <div class="page-header">
         <h1>Dashboard</h1>
-        <div class="header-actions">
+        <div class="header-actions" style="display:flex;align-items:center;gap:12px;">
+          <div class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">
+            <span class="theme-toggle-icon" id="theme-icon-dark">&#9790;</span>
+            <div class="theme-toggle-switch" id="theme-switch"></div>
+            <span class="theme-toggle-icon" id="theme-icon-light">&#9728;</span>
+          </div>
           <button class="btn btn-primary" id="btn-start-bot" onclick="toggleBot()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             Iniciar Bot
@@ -709,8 +714,56 @@
         </div>
       </div>
 
+      <!-- AI Activity Monitor -->
+      <div class="card card-full" style="margin-top: 20px;">
+        <div class="card-header">
+          <h3>Atividade da IA em Tempo Real</h3>
+          <span class="badge info" id="ai-activity-badge">Aguardando</span>
+        </div>
+        <div class="card-body">
+          <div class="ai-activity-grid">
+            <div class="ai-metric-card">
+              <div class="ai-metric-icon" style="background:rgba(0,212,255,0.12);color:#00d4ff;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              </div>
+              <div class="ai-metric-info">
+                <span class="ai-metric-label">Requisições</span>
+                <span class="ai-metric-value" id="ai-requests-count">0</span>
+              </div>
+            </div>
+            <div class="ai-metric-card">
+              <div class="ai-metric-icon" style="background:rgba(16,185,129,0.12);color:#10b981;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              </div>
+              <div class="ai-metric-info">
+                <span class="ai-metric-label">Última Análise</span>
+                <span class="ai-metric-value" id="ai-last-analysis">--</span>
+              </div>
+            </div>
+            <div class="ai-metric-card">
+              <div class="ai-metric-icon" style="background:rgba(139,92,246,0.12);color:#8b5cf6;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/></svg>
+              </div>
+              <div class="ai-metric-info">
+                <span class="ai-metric-label">Tokens Usados</span>
+                <span class="ai-metric-value" id="ai-tokens-used">0</span>
+              </div>
+            </div>
+            <div class="ai-metric-card">
+              <div class="ai-metric-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div class="ai-metric-info">
+                <span class="ai-metric-label">Custo Estimado</span>
+                <span class="ai-metric-value" id="ai-estimated-cost">$0.00</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Request Rate Config -->
-      <div class="card card-full" style="margin-top: 24px;">
+      <div class="card card-full" style="margin-top: 20px;">
         <div class="card-header">
           <h3>Configuração de Requisições à IA</h3>
           <span class="badge info">Sistema</span>

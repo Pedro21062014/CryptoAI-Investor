@@ -17,7 +17,13 @@ const state = {
     lossCooldown: 30
   },
   analysisInterval: null,
-  trades: []
+  trades: [],
+  aiMetrics: {
+    requestCount: 0,
+    tokensUsed: 0,
+    estimatedCost: 0,
+    lastAnalysis: null
+  }
 };
 
 // ===== Navigation =====
@@ -31,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   loadSavedConfig();
+  loadSavedTheme();
   addLog('info', 'Aplicativo iniciado com sucesso');
 });
 
@@ -371,6 +378,7 @@ async function runAnalysisCycle() {
     if (analysisResult.success) {
       displayAnalysis(analysisResult.analysis, analysisResult.raw);
       addLog('success', `Análise concluída: ${analysisResult.analysis.recommendation}`);
+      updateAIMetrics(analysisResult.raw ? analysisResult.raw.split(' ').length * 1.3 : 500);
 
       // Risk validation
       const riskResult = await window.electronAPI.calculateRisk(
@@ -921,5 +929,47 @@ function addLog(type, message) {
   // Keep max 100 entries
   while (log.children.length > 100) {
     log.removeChild(log.lastChild);
+  }
+}
+
+// ===== Theme Management =====
+function toggleTheme() {
+  const html = document.documentElement;
+  const currentTheme = html.getAttribute('data-theme') || 'dark';
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', newTheme);
+  localStorage.setItem('cryptoai-theme', newTheme);
+  addLog('info', `Tema alterado para ${newTheme === 'dark' ? 'escuro' : 'claro'}`);
+}
+
+function loadSavedTheme() {
+  const savedTheme = localStorage.getItem('cryptoai-theme');
+  if (savedTheme) {
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  }
+}
+
+// ===== AI Metrics Tracker =====
+function updateAIMetrics(tokensUsed) {
+  state.aiMetrics.requestCount++;
+  state.aiMetrics.tokensUsed += tokensUsed || 0;
+  state.aiMetrics.lastAnalysis = new Date();
+  // Estimate cost based on average pricing (~$0.002 per 1K tokens for most models)
+  state.aiMetrics.estimatedCost = (state.aiMetrics.tokensUsed / 1000) * 0.002;
+
+  // Update UI
+  const requestsEl = document.getElementById('ai-requests-count');
+  const tokensEl = document.getElementById('ai-tokens-used');
+  const costEl = document.getElementById('ai-estimated-cost');
+  const lastEl = document.getElementById('ai-last-analysis');
+  const badgeEl = document.getElementById('ai-activity-badge');
+
+  if (requestsEl) requestsEl.textContent = state.aiMetrics.requestCount;
+  if (tokensEl) tokensEl.textContent = state.aiMetrics.tokensUsed.toLocaleString();
+  if (costEl) costEl.textContent = `$${state.aiMetrics.estimatedCost.toFixed(4)}`;
+  if (lastEl) lastEl.textContent = state.aiMetrics.lastAnalysis.toLocaleTimeString('pt-BR');
+  if (badgeEl) {
+    badgeEl.textContent = state.botRunning ? 'Ativo' : 'Pausado';
+    badgeEl.className = state.botRunning ? 'badge success' : 'badge info';
   }
 }

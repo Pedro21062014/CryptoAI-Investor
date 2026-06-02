@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1320"/>
+      <stop offset="100%" style="stop-color:#1a2140"/>
+    </linearGradient>
+    <linearGradient id="hexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff"/>
+      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    </linearGradient>
+    <linearGradient id="innerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:0.25"/>
+      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:0.25"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <!-- Background rounded rect -->
+  <rect width="512" height="512" rx="100" fill="url(#bgGrad)"/>
+  <!-- Outer hexagon -->
+  <polygon points="256,60 430,155 430,355 256,450 82,355 82,155" fill="none" stroke="url(#hexGrad)" stroke-width="6" filter="url(#glow)"/>
+  <!-- Inner hexagon fill -->
+  <polygon points="256,100 385,175 385,335 256,410 127,335 127,175" fill="url(#innerGrad)"/>
+  <!-- Arrow up (bullish/crypto symbol) -->
+  <path d="M180,270 L256,180 L332,270 L296,270 L296,370 L216,370 L216,270 Z" fill="url(#hexGrad)" filter="url(#glow)"/>
+  <!-- Network nodes -->
+  <circle cx="256" cy="115" r="12" fill="#00d4ff" filter="url(#glow)"/>
+  <circle cx="395" cy="195" r="9" fill="#8b5cf6" filter="url(#glow)"/>
+  <circle cx="117" cy="195" r="9" fill="#00d4ff" filter="url(#glow)"/>
+  <!-- Connection lines -->
+  <line x1="256" y1="115" x2="256" y2="180" stroke="#00d4ff" stroke-width="2" opacity="0.4"/>
+  <line x1="395" y1="195" x2="332" y2="270" stroke="#8b5cf6" stroke-width="1.5" opacity="0.3"/>
+  <line x1="117" y1="195" x2="180" y2="270" stroke="#00d4ff" stroke-width="1.5" opacity="0.3"/>
+  <!-- Small decorative dots -->
+  <circle cx="256" cy="460" r="4" fill="#8b5cf6" opacity="0.4"/>
+  <circle cx="60" cy="355" r="3" fill="#00d4ff" opacity="0.3"/>
+  <circle cx="452" cy="355" r="3" fill="#8b5cf6" opacity="0.3"/>
+</svg>

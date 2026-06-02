@@ -13,7 +13,7 @@ function createWindow() {
     minHeight: 700,
     frame: false,
     transparent: false,
-    backgroundColor: '#0a0e1a',
+    backgroundColor: '#0f1320', // Default dark, renderer will set via theme
     titleBarStyle: 'hidden',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
