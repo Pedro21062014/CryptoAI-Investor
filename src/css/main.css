@@ -1467,3 +1467,26 @@ input, select, button { font-family: var(--font-primary); }
 [data-theme="light"] .analysis-history-detail .analysis-reasoning {
   background: #f8fafc;
 }
+
+/* ===== Custom Model Input ===== */
+.custom-model-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border: 1px solid var(--accent-cyan);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-mono);
+  animation: fadeIn 0.2s ease;
+}
+
+.custom-model-input:focus {
+  box-shadow: 0 0 0 3px rgba(0,212,255,0.15);
+  outline: none;
+}
+
+.custom-model-input::placeholder {
+  color: var(--text-muted);
+  font-family: var(--font-primary);
+}

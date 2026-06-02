@@ -463,10 +463,12 @@
               </div>
               <div class="form-group">
                 <label>Modelo</label>
-                <select id="deepseek-model">
+                <select id="deepseek-model" onchange="handleModelChange('deepseek')">
                   <option value="deepseek-chat">DeepSeek Chat</option>
                   <option value="deepseek-reasoner">DeepSeek Reasoner</option>
+                  <option value="custom">Personalizado...</option>
                 </select>
+                <input type="text" id="deepseek-model-custom" class="custom-model-input" placeholder="nome-do-modelo" style="display:none; margin-top:8px;">
               </div>
               <div class="form-group">
                 <label>Temperatura: <span class="temp-val" id="deepseek-temp-val">0.3</span></label>
@@ -502,12 +504,15 @@
               </div>
               <div class="form-group">
                 <label>Modelo</label>
-                <select id="openai-model">
+                <select id="openai-model" onchange="handleModelChange('openai')">
                   <option value="gpt-4o">GPT-4o</option>
                   <option value="gpt-4o-mini">GPT-4o Mini</option>
                   <option value="gpt-4-turbo">GPT-4 Turbo</option>
                   <option value="o1-preview">o1 Preview</option>
+                  <option value="o3-mini">o3 Mini</option>
+                  <option value="custom">Personalizado...</option>
                 </select>
+                <input type="text" id="openai-model-custom" class="custom-model-input" placeholder="nome-do-modelo" style="display:none; margin-top:8px;">
               </div>
               <div class="form-group">
                 <label>Temperatura: <span class="temp-val" id="openai-temp-val">0.3</span></label>
@@ -543,11 +548,14 @@
               </div>
               <div class="form-group">
                 <label>Modelo</label>
-                <select id="google-model">
+                <select id="google-model" onchange="handleModelChange('google')">
                   <option value="gemini-pro">Gemini Pro</option>
                   <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
                   <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+                  <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>
+                  <option value="custom">Personalizado...</option>
                 </select>
+                <input type="text" id="google-model-custom" class="custom-model-input" placeholder="nome-do-modelo" style="display:none; margin-top:8px;">
               </div>
               <div class="form-group">
                 <label>Temperatura: <span class="temp-val" id="google-temp-val">0.3</span></label>
@@ -583,12 +591,14 @@
               </div>
               <div class="form-group">
                 <label>Modelo</label>
-                <select id="nvidia-model">
+                <select id="nvidia-model" onchange="handleModelChange('nvidia')">
                   <option value="meta/llama-3.1-405b-instruct">Llama 3.1 405B</option>
                   <option value="meta/llama-3.1-70b-instruct">Llama 3.1 70B</option>
                   <option value="nvidia/llama-3.1-nemotron-70b-instruct">Nemotron 70B</option>
                   <option value="mistralai/mixtral-8x22b-instruct-v0.1">Mixtral 8x22B</option>
+                  <option value="custom">Personalizado...</option>
                 </select>
+                <input type="text" id="nvidia-model-custom" class="custom-model-input" placeholder="nome-do-modelo" style="display:none; margin-top:8px;">
               </div>
               <div class="form-group">
                 <label>Temperatura: <span class="temp-val" id="nvidia-temp-val">0.3</span></label>
@@ -624,12 +634,14 @@
               </div>
               <div class="form-group">
                 <label>Modelo</label>
-                <select id="claude-model">
+                <select id="claude-model" onchange="handleModelChange('claude')">
                   <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
                   <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
                   <option value="claude-3-opus-20240229">Claude 3 Opus</option>
                   <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                  <option value="custom">Personalizado...</option>
                 </select>
+                <input type="text" id="claude-model-custom" class="custom-model-input" placeholder="nome-do-modelo" style="display:none; margin-top:8px;">
               </div>
               <div class="form-group">
                 <label>Temperatura: <span class="temp-val" id="claude-temp-val">0.3</span></label>
@@ -665,13 +677,15 @@
               </div>
               <div class="form-group">
                 <label>Modelo</label>
-                <select id="openrouter-model">
+                <select id="openrouter-model" onchange="handleModelChange('openrouter')">
                   <option value="openai/gpt-4o">GPT-4o</option>
                   <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
                   <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
                   <option value="meta-llama/llama-3.1-405b-instruct">Llama 3.1 405B</option>
                   <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
+                  <option value="custom">Personalizado...</option>
                 </select>
+                <input type="text" id="openrouter-model-custom" class="custom-model-input" placeholder="nome-do-modelo" style="display:none; margin-top:8px;">
               </div>
               <div class="form-group">
                 <label>Temperatura: <span class="temp-val" id="openrouter-temp-val">0.3</span></label>

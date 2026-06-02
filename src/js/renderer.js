@@ -254,11 +254,32 @@ async function connectAI(provider) {
   }
 }
 
+function handleModelChange(provider) {
+  const select = document.getElementById(`${provider}-model`);
+  const customInput = document.getElementById(`${provider}-model-custom`);
+  if (select && customInput) {
+    if (select.value === 'custom') {
+      customInput.style.display = 'block';
+      customInput.focus();
+    } else {
+      customInput.style.display = 'none';
+      customInput.value = '';
+    }
+  }
+}
+
 function getAIConfig(provider) {
+  const selectEl = document.getElementById(`${provider}-model`);
+  let model = selectEl?.value || 'default';
+  if (model === 'custom') {
+    const customInput = document.getElementById(`${provider}-model-custom`);
+    model = customInput?.value || 'default';
+  }
+
   const config = {
     provider: provider,
     apiKey: document.getElementById(`${provider}-apikey`)?.value || '',
-    model: document.getElementById(`${provider}-model`)?.value || 'default',
+    model: model,
     temperature: parseFloat(document.getElementById(`${provider}-temperature`)?.value || 0.3),
     maxTokens: parseInt(document.getElementById('max-tokens')?.value || 2000)
   };
@@ -723,6 +744,7 @@ async function executeTrade() {
         status: 'filled'
       });
       updateTradesTable();
+      saveConfig();
     } else {
       showToast(`Erro no trade: ${result.error}`, 'error');
       addLog('error', `Falha no trade: ${result.error}`);
@@ -763,6 +785,7 @@ async function executeAITrade(analysis) {
         status: 'filled'
       });
       updateTradesTable();
+      saveConfig();
     } else {
       addLog('error', `[AUTO-TRADE] Falha: ${result.error}`);
     }
@@ -995,12 +1018,28 @@ function updateRiskUI(riskResult) {
 // ===== Config Persistence =====
 function saveConfig() {
   try {
+    // Save model selections
+    const modelSelections = {};
+    ['deepseek', 'openai', 'google', 'nvidia', 'claude', 'openrouter'].forEach(p => {
+      const sel = document.getElementById(`${p}-model`);
+      const custom = document.getElementById(`${p}-model-custom`);
+      if (sel) {
+        modelSelections[p] = {
+          model: sel.value,
+          customModel: custom?.value || ''
+        };
+      }
+    });
+
     const config = {
       exchangeConfigs: state.exchangeConfigs,
       aiConfigs: state.aiConfigs,
       riskConfig: state.riskConfig,
       activeExchange: state.activeExchange,
-      activeAI: state.activeAI
+      activeAI: state.activeAI,
+      trades: state.trades,
+      aiMetrics: state.aiMetrics,
+      modelSelections: modelSelections
     };
     localStorage.setItem('cryptoai-config', JSON.stringify(config));
   } catch (e) {
@@ -1052,6 +1091,34 @@ function loadSavedConfig() {
         if (document.getElementById('max-daily-trades')) document.getElementById('max-daily-trades').value = config.riskConfig.maxDailyTrades || 10;
         if (document.getElementById('investment-style')) document.getElementById('investment-style').value = config.riskConfig.investmentStyle || 'moderate';
         if (document.getElementById('loss-cooldown')) document.getElementById('loss-cooldown').value = config.riskConfig.lossCooldown || 30;
+      }
+
+      // Restore trades
+      if (config.trades) {
+        state.trades = config.trades;
+        updateTradesTable();
+      }
+
+      // Restore AI metrics
+      if (config.aiMetrics) {
+        state.aiMetrics = { ...state.aiMetrics, ...config.aiMetrics };
+        updateAIMetricsUI();
+      }
+
+      // Restore model selections
+      if (config.modelSelections) {
+        Object.keys(config.modelSelections).forEach(p => {
+          const sel = document.getElementById(`${p}-model`);
+          const custom = document.getElementById(`${p}-model-custom`);
+          const saved = config.modelSelections[p];
+          if (sel && saved.model) {
+            sel.value = saved.model;
+            if (sel.value === 'custom' && custom) {
+              custom.style.display = 'block';
+              custom.value = saved.customModel || '';
+            }
+          }
+        });
       }
 
       addLog('info', 'Configurações salvas restauradas');
@@ -1108,24 +1175,30 @@ function loadSavedTheme() {
 }
 
 // ===== AI Metrics Tracker =====
-function updateAIMetrics(tokensUsed) {
-  state.aiMetrics.requestCount++;
-  state.aiMetrics.tokensUsed += tokensUsed || 0;
-  state.aiMetrics.lastAnalysis = new Date();
-  // Estimate cost based on average pricing (~$0.002 per 1K tokens for most models)
-  state.aiMetrics.estimatedCost = (state.aiMetrics.tokensUsed / 1000) * 0.002;
-
-  // Update UI
+function updateAIMetricsUI() {
   const requestsEl = document.getElementById('ai-requests-count');
   const tokensEl = document.getElementById('ai-tokens-used');
   const costEl = document.getElementById('ai-estimated-cost');
   const lastEl = document.getElementById('ai-last-analysis');
-  const badgeEl = document.getElementById('ai-activity-badge');
 
   if (requestsEl) requestsEl.textContent = state.aiMetrics.requestCount;
   if (tokensEl) tokensEl.textContent = state.aiMetrics.tokensUsed.toLocaleString();
-  if (costEl) costEl.textContent = `$${state.aiMetrics.estimatedCost.toFixed(4)}`;
-  if (lastEl) lastEl.textContent = state.aiMetrics.lastAnalysis.toLocaleTimeString('pt-BR');
+  if (costEl) costEl.textContent = `$${state.aiMetrics.estimatedCost.toFixed(2)}`;
+  if (state.aiMetrics.lastAnalysis) {
+    const time = new Date(state.aiMetrics.lastAnalysis).toLocaleTimeString('pt-BR');
+    if (lastEl) lastEl.textContent = time;
+  }
+}
+
+function updateAIMetrics(tokenCount) {
+  state.aiMetrics.requestCount++;
+  state.aiMetrics.tokensUsed += Math.round(tokenCount || 0);
+  state.aiMetrics.estimatedCost += (tokenCount / 1000) * 0.002; // rough estimate
+  state.aiMetrics.lastAnalysis = new Date().toISOString();
+  updateAIMetricsUI();
+  saveConfig();
+
+  const badgeEl = document.getElementById('ai-activity-badge');
   if (badgeEl) {
     badgeEl.textContent = state.botRunning ? 'Ativo' : 'Pausado';
     badgeEl.className = state.botRunning ? 'badge success' : 'badge info';
