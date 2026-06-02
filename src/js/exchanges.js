@@ -1,0 +1,411 @@
+const axios = require('axios');
+const crypto = require('crypto');
+
+// Exchange API implementations
+const exchanges = {
+  bybit: {
+    baseUrl: 'https://api.bybit.com',
+    testnetUrl: 'https://api-testnet.bybit.com',
+
+    async testConnection(config) {
+      try {
+        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/account/wallet-balance`;
+        const timestamp = Date.now().toString();
+        const params = `accountType=UNIFIED`;
+        const sign = this.sign(config.apiSecret, timestamp, config.apiKey, params);
+        const response = await axios.get(`${url}?${params}`, {
+          headers: {
+            'X-BAPI-API-KEY': config.apiKey,
+            'X-BAPI-TIMESTAMP': timestamp,
+            'X-BAPI-SIGN': sign,
+            'X-BAPI-RECV-WINDOW': '20000'
+          }
+        });
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    sign(secret, timestamp, apiKey, params) {
+      const payload = timestamp + apiKey + '20000' + params;
+      return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    },
+
+    async getBalance(config) {
+      try {
+        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/account/wallet-balance`;
+        const timestamp = Date.now().toString();
+        const params = `accountType=UNIFIED`;
+        const sign = this.sign(config.apiSecret, timestamp, config.apiKey, params);
+        const response = await axios.get(`${url}?${params}`, {
+          headers: {
+            'X-BAPI-API-KEY': config.apiKey,
+            'X-BAPI-TIMESTAMP': timestamp,
+            'X-BAPI-SIGN': sign,
+            'X-BAPI-RECV-WINDOW': '20000'
+          }
+        });
+        if (response.data.retCode === 0) {
+          const coins = response.data.result.list?.[0]?.coin || [];
+          return { success: true, balance: coins.filter(c => parseFloat(c.walletBalance) > 0) };
+        }
+        return { success: false, error: response.data.retMsg };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getMarkets(config) {
+      try {
+        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/market/tickers`;
+        const response = await axios.get(`${url}?category=linear&symbol=BTCUSDT`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async placeOrder(config, order) {
+      try {
+        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/order/create`;
+        const timestamp = Date.now().toString();
+        const body = {
+          category: 'linear',
+          symbol: order.symbol,
+          side: order.side,
+          orderType: order.type || 'Market',
+          qty: order.quantity.toString(),
+          timeInForce: 'GTC'
+        };
+        if (order.price) body.price = order.price.toString();
+        const payload = timestamp + config.apiKey + '20000' + JSON.stringify(body);
+        const sign = crypto.createHmac('sha256', config.apiSecret).update(payload).digest('hex');
+        const response = await axios.post(url, body, {
+          headers: {
+            'X-BAPI-API-KEY': config.apiKey,
+            'X-BAPI-TIMESTAMP': timestamp,
+            'X-BAPI-SIGN': sign,
+            'X-BAPI-RECV-WINDOW': '20000',
+            'Content-Type': 'application/json'
+          }
+        });
+        return { success: response.data.retCode === 0, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getOrderBook(config, symbol) {
+      try {
+        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/market/orderbook`;
+        const response = await axios.get(`${url}?category=linear&symbol=${symbol}`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getCandlesticks(config, symbol, interval = '60') {
+      try {
+        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/market/kline`;
+        const response = await axios.get(`${url}?category=linear&symbol=${symbol}&interval=${interval}`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    }
+  },
+
+  okx: {
+    baseUrl: 'https://www.okx.com',
+
+    sign(secret, timestamp, method, path, body = '') {
+      const message = timestamp + method + path + body;
+      return crypto.createHmac('sha256', secret).update(message).digest('base64');
+    },
+
+    async testConnection(config) {
+      try {
+        const timestamp = new Date().toISOString();
+        const path = '/api/v5/account/balance';
+        const sign = this.sign(config.apiSecret, timestamp, 'GET', path);
+        const response = await axios.get(`${this.baseUrl}${path}`, {
+          headers: {
+            'OK-ACCESS-KEY': config.apiKey,
+            'OK-ACCESS-SIGN': sign,
+            'OK-ACCESS-TIMESTAMP': timestamp,
+            'OK-ACCESS-PASSPHRASE': config.passphrase || ''
+          }
+        });
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getBalance(config) {
+      try {
+        const timestamp = new Date().toISOString();
+        const path = '/api/v5/account/balance';
+        const sign = this.sign(config.apiSecret, timestamp, 'GET', path);
+        const response = await axios.get(`${this.baseUrl}${path}`, {
+          headers: {
+            'OK-ACCESS-KEY': config.apiKey,
+            'OK-ACCESS-SIGN': sign,
+            'OK-ACCESS-TIMESTAMP': timestamp,
+            'OK-ACCESS-PASSPHRASE': config.passphrase || ''
+          }
+        });
+        if (response.data.code === '0') {
+          return { success: true, balance: response.data.data?.[0]?.details || [] };
+        }
+        return { success: false, error: response.data.msg };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getMarkets(config) {
+      try {
+        const response = await axios.get(`${this.baseUrl}/api/v5/market/tickers?instType=SPOT`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async placeOrder(config, order) {
+      try {
+        const timestamp = new Date().toISOString();
+        const path = '/api/v5/trade/order';
+        const body = JSON.stringify({
+          instId: order.symbol,
+          tdMode: 'cash',
+          side: order.side.toLowerCase(),
+          ordType: order.type === 'Market' ? 'market' : 'limit',
+          sz: order.quantity.toString(),
+          ...(order.price ? { px: order.price.toString() } : {})
+        });
+        const sign = this.sign(config.apiSecret, timestamp, 'POST', path, body);
+        const response = await axios.post(`${this.baseUrl}${path}`, body, {
+          headers: {
+            'OK-ACCESS-KEY': config.apiKey,
+            'OK-ACCESS-SIGN': sign,
+            'OK-ACCESS-TIMESTAMP': timestamp,
+            'OK-ACCESS-PASSPHRASE': config.passphrase || '',
+            'Content-Type': 'application/json'
+          }
+        });
+        return { success: response.data.code === '0', data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getOrderBook(config, symbol) {
+      try {
+        const response = await axios.get(`${this.baseUrl}/api/v5/market/books?instId=${symbol}`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getCandlesticks(config, symbol, interval = '1H') {
+      try {
+        const response = await axios.get(`${this.baseUrl}/api/v5/market/candles?instId=${symbol}&bar=${interval}`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    }
+  },
+
+  binance: {
+    baseUrl: 'https://api.binance.com',
+    testnetUrl: 'https://testnet.binance.vision',
+
+    sign(secret, params) {
+      return crypto.createHmac('sha256', secret).update(params).digest('hex');
+    },
+
+    async testConnection(config) {
+      try {
+        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const timestamp = Date.now();
+        const params = `timestamp=${timestamp}`;
+        const signature = this.sign(config.apiSecret, params);
+        const response = await axios.get(`${base}/api/v3/account?${params}&signature=${signature}`, {
+          headers: { 'X-MBX-APIKEY': config.apiKey }
+        });
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getBalance(config) {
+      try {
+        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const timestamp = Date.now();
+        const params = `timestamp=${timestamp}`;
+        const signature = this.sign(config.apiSecret, params);
+        const response = await axios.get(`${base}/api/v3/account?${params}&signature=${signature}`, {
+          headers: { 'X-MBX-APIKEY': config.apiKey }
+        });
+        const balances = response.data.balances?.filter(b => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0) || [];
+        return { success: true, balance: balances };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getMarkets(config) {
+      try {
+        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const response = await axios.get(`${base}/api/v3/ticker/24hr`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async placeOrder(config, order) {
+      try {
+        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const timestamp = Date.now();
+        let params = `symbol=${order.symbol}&side=${order.side}&type=${order.type || 'MARKET'}&quantity=${order.quantity}&timestamp=${timestamp}`;
+        if (order.price) params += `&price=${order.price}&timeInForce=GTC`;
+        const signature = this.sign(config.apiSecret, params);
+        const response = await axios.post(`${base}/api/v3/order?${params}&signature=${signature}`, {}, {
+          headers: { 'X-MBX-APIKEY': config.apiKey }
+        });
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getOrderBook(config, symbol) {
+      try {
+        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const response = await axios.get(`${base}/api/v3/depth?symbol=${symbol}&limit=20`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getCandlesticks(config, symbol, interval = '1h') {
+      try {
+        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const response = await axios.get(`${base}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=100`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    }
+  },
+
+  custom: {
+    async testConnection(config) {
+      try {
+        const response = await axios.get(`${config.baseUrl}/api/v3/account`, {
+          headers: config.headers || {},
+          params: config.params || {}
+        });
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getBalance(config) {
+      try {
+        const response = await axios.get(`${config.baseUrl}/api/v3/account`, {
+          headers: config.headers || {}
+        });
+        return { success: true, balance: response.data.balances || [] };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getMarkets(config) {
+      try {
+        const response = await axios.get(`${config.baseUrl}/api/v3/ticker/24hr`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async placeOrder(config, order) {
+      try {
+        const response = await axios.post(`${config.baseUrl}/api/v3/order`, order, {
+          headers: { ...config.headers, 'Content-Type': 'application/json' }
+        });
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getOrderBook(config, symbol) {
+      try {
+        const response = await axios.get(`${config.baseUrl}/api/v3/depth?symbol=${symbol}`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    },
+
+    async getCandlesticks(config, symbol, interval) {
+      try {
+        const response = await axios.get(`${config.baseUrl}/api/v3/klines?symbol=${symbol}&interval=${interval}`);
+        return { success: true, data: response.data };
+      } catch (err) {
+        return { success: false, error: err.message };
+      }
+    }
+  }
+};
+
+module.exports = {
+  testConnection(config) {
+    const ex = exchanges[config.exchange];
+    if (!ex) return Promise.resolve({ success: false, error: 'Exchange not supported' });
+    return ex.testConnection(config);
+  },
+
+  getBalance(config) {
+    const ex = exchanges[config.exchange];
+    if (!ex) return Promise.resolve({ success: false, error: 'Exchange not supported' });
+    return ex.getBalance(config);
+  },
+
+  getMarkets(config) {
+    const ex = exchanges[config.exchange];
+    if (!ex) return Promise.resolve({ success: false, error: 'Exchange not supported' });
+    return ex.getMarkets(config);
+  },
+
+  placeOrder(config, order) {
+    const ex = exchanges[config.exchange];
+    if (!ex) return Promise.resolve({ success: false, error: 'Exchange not supported' });
+    return ex.placeOrder(config, order);
+  },
+
+  getOrderBook(config, symbol) {
+    const ex = exchanges[config.exchange];
+    if (!ex) return Promise.resolve({ success: false, error: 'Exchange not supported' });
+    return ex.getOrderBook(config, symbol);
+  },
+
+  getCandlesticks(config, symbol, interval) {
+    const ex = exchanges[config.exchange];
+    if (!ex) return Promise.resolve({ success: false, error: 'Exchange not supported' });
+    return ex.getCandlesticks(config, symbol, interval);
+  }
+};

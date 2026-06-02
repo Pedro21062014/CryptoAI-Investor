@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CryptoAI Investor</title>
+  <link rel="stylesheet" href="css/main.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Custom Title Bar -->
+  <div id="titlebar">
+    <div class="titlebar-drag">
+      <div class="titlebar-icon">
+        <img src="assets/logos/../../build/icon.png" alt="CryptoAI" id="app-icon">
+      </div>
+      <span class="titlebar-title">CryptoAI Investor</span>
+    </div>
+    <div class="titlebar-controls">
+      <button class="titlebar-btn minimize" onclick="window.electronAPI.minimize()">
+        <svg width="12" height="12" viewBox="0 0 12 12"><rect y="5" width="12" height="2" fill="currentColor"/></svg>
+      </button>
+      <button class="titlebar-btn maximize" onclick="window.electronAPI.maximize()">
+        <svg width="12" height="12" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" stroke="currentColor" stroke-width="1.5" fill="none"/></svg>
+      </button>
+      <button class="titlebar-btn close" onclick="window.electronAPI.close()">
+        <svg width="12" height="12" viewBox="0 0 12 12"><path d="M1 1L11 11M11 1L1 11" stroke="currentColor" stroke-width="1.5"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon">
+        <svg viewBox="0 0 64 64" width="40" height="40">
+          <defs>
+            <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#00d4ff"/>
+              <stop offset="100%" style="stop-color:#7b2ff7"/>
+            </linearGradient>
+          </defs>
+          <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="none" stroke="url(#logoGrad)" stroke-width="2.5"/>
+          <polygon points="32,12 50,23 50,41 32,52 14,41 14,23" fill="url(#logoGrad)" opacity="0.15"/>
+          <path d="M22,28 L32,18 L42,28 L36,28 L36,42 L28,42 L28,28 Z" fill="url(#logoGrad)"/>
+          <circle cx="32" cy="14" r="2.5" fill="#00d4ff"/>
+          <circle cx="52" cy="24" r="2" fill="#7b2ff7"/>
+          <circle cx="12" cy="24" r="2" fill="#00d4ff"/>
+          <line x1="32" y1="14" x2="32" y2="18" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+        </svg>
+      </div>
+      <span class="logo-text">CryptoAI</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-page="dashboard">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-page="exchanges">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <span>Corretoras</span>
+      </a>
+      <a href="#" class="nav-item" data-page="ai-config">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93V12h2.75a3.5 3.5 0 0 1 3.5 3.5v1.75c1.85.35 3.25 1.98 3.25 3.93a4 4 0 1 1-7-2.64V15.5a.5.5 0 0 0-.5-.5h-5.5a.5.5 0 0 0-.5.5v3.04a4 4 0 1 1-2 0V15.5a3.5 3.5 0 0 1 3.5-3.5h2.75V9.93A4.002 4.002 0 0 1 12 2z"/></svg>
+        <span>IA Config</span>
+      </a>
+      <a href="#" class="nav-item" data-page="trading">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <span>Trading</span>
+      </a>
+      <a href="#" class="nav-item" data-page="news">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><line x1="10" y1="6" x2="18" y2="6"/><line x1="10" y1="10" x2="18" y2="10"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+        <span>Notícias</span>
+      </a>
+      <a href="#" class="nav-item" data-page="risk">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span>Risco</span>
+      </a>
+      <a href="#" class="nav-item" data-page="settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Configurações</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-indicator" id="bot-status">
+        <span class="status-dot offline"></span>
+        <span class="status-text">Bot Parado</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div id="main-content">
+    <!-- Dashboard Page -->
+    <div class="page active" id="page-dashboard">
+      <div class="page-header">
+        <h1>Dashboard</h1>
+        <div class="header-actions">
+          <button class="btn btn-primary" id="btn-start-bot" onclick="toggleBot()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Iniciar Bot
+          </button>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+          <div class="stat-info">
+            <span class="stat-label">Saldo Total</span>
+            <span class="stat-value" id="total-balance">$0.00</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+          <div class="stat-info">
+            <span class="stat-label">P&L Hoje</span>
+            <span class="stat-value" id="daily-pnl">$0.00</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon purple"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg></div>
+          <div class="stat-info">
+            <span class="stat-label">Trades Hoje</span>
+            <span class="stat-value" id="daily-trades">0</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+          <div class="stat-info">
+            <span class="stat-label">Risco Atual</span>
+            <span class="stat-value" id="current-risk">Baixo</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard-grid">
+        <div class="card card-large">
+          <div class="card-header">
+            <h3>Análise da IA</h3>
+            <span class="badge" id="ai-status-badge">Desconectado</span>
+          </div>
+          <div class="card-body" id="ai-analysis-content">
+            <div class="empty-state">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93V12h2.75a3.5 3.5 0 0 1 3.5 3.5v1.75c1.85.35 3.25 1.98 3.25 3.93a4 4 0 1 1-7-2.64V15.5a.5.5 0 0 0-.5-.5h-5.5a.5.5 0 0 0-.5.5v3.04a4 4 0 1 1-2 0V15.5a3.5 3.5 0 0 1 3.5-3.5h2.75V9.93A4.002 4.002 0 0 1 12 2z"/></svg>
+              <p>Configure a IA e inicie o bot para ver análises</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Mercado</h3>
+            <button class="btn btn-sm" onclick="loadMarketData()">Atualizar</button>
+          </div>
+          <div class="card-body" id="market-data-content">
+            <div class="empty-state">
+              <p>Conecte uma corretora para ver dados</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h3>Sentimento</h3>
+            <div class="sentiment-gauge" id="sentiment-gauge">
+              <div class="gauge-circle">
+                <span class="gauge-value">50</span>
+              </div>
+              <span class="gauge-label">Neutro</span>
+            </div>
+          </div>
+          <div class="card-body" id="sentiment-content">
+            <div class="empty-state">
+              <p>Dados de sentimento carregarão automaticamente</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-full">
+          <div class="card-header">
+            <h3>Histórico de Trades</h3>
+          </div>
+          <div class="card-body">
+            <table class="data-table" id="trades-table">
+              <thead>
+                <tr>
+                  <th>Horário</th>
+                  <th>Par</th>
+                  <th>Lado</th>
+                  <th>Preço</th>
+                  <th>Qtd</th>
+                  <th>P&L</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="trades-tbody">
+                <tr><td colspan="7" class="empty-row">Nenhum trade realizado</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Exchanges Page -->
+    <div class="page" id="page-exchanges">
+      <div class="page-header">
+        <h1>Corretoras</h1>
+      </div>
+
+      <div class="exchanges-grid">
+        <!-- Bybit Card -->
+        <div class="exchange-card" data-exchange="bybit">
+          <div class="exchange-logo">
+            <img src="assets/logos/bybit.png" alt="Bybit">
+          </div>
+          <h3>Bybit</h3>
+          <p class="exchange-desc">Exchange de criptomoedas com derivativos</p>
+          <div class="exchange-status" id="bybit-status">
+            <span class="status-dot offline"></span> Desconectado
+          </div>
+          <div class="exchange-form" id="bybit-form">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="bybit-apikey" placeholder="Sua API Key">
+            </div>
+            <div class="form-group">
+              <label>API Secret</label>
+              <input type="password" id="bybit-apisecret" placeholder="Sua API Secret">
+            </div>
+            <div class="form-group checkbox-group">
+              <label><input type="checkbox" id="bybit-testnet"> Usar Testnet</label>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="connectExchange('bybit')">Conectar</button>
+              <button class="btn btn-outline" onclick="testExchange('bybit')">Testar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- OKX Card -->
+        <div class="exchange-card" data-exchange="okx">
+          <div class="exchange-logo">
+            <img src="assets/logos/okx.png" alt="OKX">
+          </div>
+          <h3>OKX</h3>
+          <p class="exchange-desc">Exchange global de criptomoedas</p>
+          <div class="exchange-status" id="okx-status">
+            <span class="status-dot offline"></span> Desconectado
+          </div>
+          <div class="exchange-form" id="okx-form">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="okx-apikey" placeholder="Sua API Key">
+            </div>
+            <div class="form-group">
+              <label>API Secret</label>
+              <input type="password" id="okx-apisecret" placeholder="Sua API Secret">
+            </div>
+            <div class="form-group">
+              <label>Passphrase</label>
+              <input type="password" id="okx-passphrase" placeholder="Passphrase da API">
+            </div>
+            <div class="form-group checkbox-group">
+              <label><input type="checkbox" id="okx-testnet"> Usar Testnet</label>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="connectExchange('okx')">Conectar</button>
+              <button class="btn btn-outline" onclick="testExchange('okx')">Testar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Binance Card -->
+        <div class="exchange-card" data-exchange="binance">
+          <div class="exchange-logo">
+            <img src="assets/logos/binance.png" alt="Binance">
+          </div>
+          <h3>Binance</h3>
+          <p class="exchange-desc">Maior exchange de criptomoedas do mundo</p>
+          <div class="exchange-status" id="binance-status">
+            <span class="status-dot offline"></span> Desconectado
+          </div>
+          <div class="exchange-form" id="binance-form">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="binance-apikey" placeholder="Sua API Key">
+            </div>
+            <div class="form-group">
+              <label>API Secret</label>
+              <input type="password" id="binance-apisecret" placeholder="Sua API Secret">
+            </div>
+            <div class="form-group checkbox-group">
+              <label><input type="checkbox" id="binance-testnet"> Usar Testnet</label>
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="connectExchange('binance')">Conectar</button>
+              <button class="btn btn-outline" onclick="testExchange('binance')">Testar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Custom Exchange Card -->
+        <div class="exchange-card custom-exchange" data-exchange="custom">
+          <div class="exchange-logo custom-logo">
+            <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          </div>
+          <h3>Personalizada</h3>
+          <p class="exchange-desc">Configure qualquer exchange compatível</p>
+          <div class="exchange-status" id="custom-status">
+            <span class="status-dot offline"></span> Desconectado
+          </div>
+          <div class="exchange-form" id="custom-form">
+            <div class="form-group">
+              <label>Nome da Exchange</label>
+              <input type="text" id="custom-name" placeholder="Ex: Kraken">
+            </div>
+            <div class="form-group">
+              <label>URL Base da API</label>
+              <input type="url" id="custom-baseurl" placeholder="https://api.exchange.com">
+            </div>
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="custom-apikey" placeholder="Sua API Key">
+            </div>
+            <div class="form-group">
+              <label>API Secret</label>
+              <input type="password" id="custom-apisecret" placeholder="Sua API Secret">
+            </div>
+            <div class="form-actions">
+              <button class="btn btn-primary" onclick="connectExchange('custom')">Conectar</button>
+              <button class="btn btn-outline" onclick="testExchange('custom')">Testar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Config Page -->
+    <div class="page" id="page-ai-config">
+      <div class="page-header">
+        <h1>Configuração da IA</h1>
+      </div>
+
+      <div class="ai-providers-grid">
+        <!-- DeepSeek -->
+        <div class="ai-card" data-provider="deepseek">
+          <div class="ai-card-header">
+            <div class="ai-provider-icon deepseek">
+              <span>DS</span>
+            </div>
+            <div>
+              <h3>DeepSeek</h3>
+              <p>Modelo de IA avançado</p>
+            </div>
+          </div>
+          <div class="ai-card-body">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="deepseek-apikey" placeholder="sk-...">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <select id="deepseek-model">
+                <option value="deepseek-chat">DeepSeek Chat</option>
+                <option value="deepseek-reasoner">DeepSeek Reasoner</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Temperatura: <span id="deepseek-temp-val">0.3</span></label>
+              <input type="range" id="deepseek-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('deepseek-temp-val').textContent=this.value">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="connectAI('deepseek')">Conectar</button>
+          </div>
+        </div>
+
+        <!-- OpenAI -->
+        <div class="ai-card" data-provider="openai">
+          <div class="ai-card-header">
+            <div class="ai-provider-icon openai">
+              <span>OAI</span>
+            </div>
+            <div>
+              <h3>OpenAI</h3>
+              <p>GPT-4 e outros modelos</p>
+            </div>
+          </div>
+          <div class="ai-card-body">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="openai-apikey" placeholder="sk-...">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <select id="openai-model">
+                <option value="gpt-4o">GPT-4o</option>
+                <option value="gpt-4o-mini">GPT-4o Mini</option>
+                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                <option value="o1-preview">o1 Preview</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Temperatura: <span id="openai-temp-val">0.3</span></label>
+              <input type="range" id="openai-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('openai-temp-val').textContent=this.value">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="connectAI('openai')">Conectar</button>
+          </div>
+        </div>
+
+        <!-- Google -->
+        <div class="ai-card" data-provider="google">
+          <div class="ai-card-header">
+            <div class="ai-provider-icon google">
+              <span>G</span>
+            </div>
+            <div>
+              <h3>Google AI</h3>
+              <p>Gemini Pro e Flash</p>
+            </div>
+          </div>
+          <div class="ai-card-body">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="google-apikey" placeholder="AIza...">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <select id="google-model">
+                <option value="gemini-pro">Gemini Pro</option>
+                <option value="gemini-1.5-flash">Gemini 1.5 Flash</option>
+                <option value="gemini-1.5-pro">Gemini 1.5 Pro</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Temperatura: <span id="google-temp-val">0.3</span></label>
+              <input type="range" id="google-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('google-temp-val').textContent=this.value">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="connectAI('google')">Conectar</button>
+          </div>
+        </div>
+
+        <!-- NVIDIA -->
+        <div class="ai-card" data-provider="nvidia">
+          <div class="ai-card-header">
+            <div class="ai-provider-icon nvidia">
+              <span>NV</span>
+            </div>
+            <div>
+              <h3>NVIDIA AI</h3>
+              <p>NIM API Foundation Models</p>
+            </div>
+          </div>
+          <div class="ai-card-body">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="nvidia-apikey" placeholder="nvapi-...">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <select id="nvidia-model">
+                <option value="meta/llama-3.1-405b-instruct">Llama 3.1 405B</option>
+                <option value="meta/llama-3.1-70b-instruct">Llama 3.1 70B</option>
+                <option value="nvidia/llama-3.1-nemotron-70b-instruct">Nemotron 70B</option>
+                <option value="mistralai/mixtral-8x22b-instruct-v0.1">Mixtral 8x22B</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Temperatura: <span id="nvidia-temp-val">0.3</span></label>
+              <input type="range" id="nvidia-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('nvidia-temp-val').textContent=this.value">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="connectAI('nvidia')">Conectar</button>
+          </div>
+        </div>
+
+        <!-- Claude -->
+        <div class="ai-card" data-provider="claude">
+          <div class="ai-card-header">
+            <div class="ai-provider-icon claude">
+              <span>CL</span>
+            </div>
+            <div>
+              <h3>Claude (Anthropic)</h3>
+              <p>Modelo avançado de raciocínio</p>
+            </div>
+          </div>
+          <div class="ai-card-body">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="claude-apikey" placeholder="sk-ant-...">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <select id="claude-model">
+                <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+                <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Temperatura: <span id="claude-temp-val">0.3</span></label>
+              <input type="range" id="claude-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('claude-temp-val').textContent=this.value">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="connectAI('claude')">Conectar</button>
+          </div>
+        </div>
+
+        <!-- OpenRouter -->
+        <div class="ai-card" data-provider="openrouter">
+          <div class="ai-card-header">
+            <div class="ai-provider-icon openrouter">
+              <span>OR</span>
+            </div>
+            <div>
+              <h3>OpenRouter</h3>
+              <p>Acesso a múltiplos modelos</p>
+            </div>
+          </div>
+          <div class="ai-card-body">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="openrouter-apikey" placeholder="sk-or-...">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <select id="openrouter-model">
+                <option value="openai/gpt-4o">GPT-4o</option>
+                <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
+                <option value="google/gemini-pro-1.5">Gemini Pro 1.5</option>
+                <option value="meta-llama/llama-3.1-405b-instruct">Llama 3.1 405B</option>
+                <option value="deepseek/deepseek-chat">DeepSeek Chat</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Temperatura: <span id="openrouter-temp-val">0.3</span></label>
+              <input type="range" id="openrouter-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('openrouter-temp-val').textContent=this.value">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="connectAI('openrouter')">Conectar</button>
+          </div>
+        </div>
+
+        <!-- Custom AI -->
+        <div class="ai-card" data-provider="custom">
+          <div class="ai-card-header">
+            <div class="ai-provider-icon custom-ai">
+              <span>+</span>
+            </div>
+            <div>
+              <h3>Personalizada</h3>
+              <p>Qualquer API OpenAI-compatible</p>
+            </div>
+          </div>
+          <div class="ai-card-body">
+            <div class="form-group">
+              <label>Nome do Provedor</label>
+              <input type="text" id="custom-ai-name" placeholder="Ex: Groq, Together AI...">
+            </div>
+            <div class="form-group">
+              <label>URL Base da API</label>
+              <input type="url" id="custom-ai-baseurl" placeholder="https://api.example.com/v1">
+            </div>
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="password" id="custom-ai-apikey" placeholder="Sua API Key">
+            </div>
+            <div class="form-group">
+              <label>Modelo</label>
+              <input type="text" id="custom-ai-model" placeholder="nome-do-modelo">
+            </div>
+            <div class="form-group">
+              <label>Temperatura: <span id="custom-ai-temp-val">0.3</span></label>
+              <input type="range" id="custom-ai-temperature" min="0" max="1" step="0.1" value="0.3" oninput="document.getElementById('custom-ai-temp-val').textContent=this.value">
+            </div>
+            <button class="btn btn-primary btn-block" onclick="connectAI('custom')">Conectar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Request Rate Config -->
+      <div class="card card-full" style="margin-top: 24px;">
+        <div class="card-header">
+          <h3>Configuração de Requisições à IA</h3>
+        </div>
+        <div class="card-body">
+          <div class="request-config">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Intervalo entre requisições</label>
+                <div class="input-with-unit">
+                  <input type="number" id="request-interval" value="5" min="1" max="60">
+                  <span class="input-unit">minutos</span>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Requisições por hora (máx)</label>
+                <input type="number" id="requests-per-hour" value="12" min="1" max="60">
+              </div>
+              <div class="form-group">
+                <label>Max tokens por requisição</label>
+                <input type="number" id="max-tokens" value="2000" min="100" max="8000" step="100">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Análise contínua</label>
+                <select id="continuous-analysis">
+                  <option value="enabled">Ativado</option>
+                  <option value="disabled">Desativado</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Auto-trade baseado na IA</label>
+                <select id="auto-trade">
+                  <option value="disabled">Desativado (apenas análise)</option>
+                  <option value="confirmation">Com confirmação</option>
+                  <option value="enabled">Ativado (automático)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Pares para monitorar</label>
+                <input type="text" id="monitor-pairs" value="BTCUSDT,ETHUSDT,SOLUSDT" placeholder="Separados por vírgula">
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trading Page -->
+    <div class="page" id="page-trading">
+      <div class="page-header">
+        <h1>Trading</h1>
+      </div>
+
+      <div class="trading-layout">
+        <div class="trading-main">
+          <div class="card">
+            <div class="card-header">
+              <h3>Executar Trade</h3>
+            </div>
+            <div class="card-body">
+              <div class="trade-form">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Corretora</label>
+                    <select id="trade-exchange">
+                      <option value="">Selecione...</option>
+                      <option value="bybit">Bybit</option>
+                      <option value="okx">OKX</option>
+                      <option value="binance">Binance</option>
+                      <option value="custom">Personalizada</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Par</label>
+                    <input type="text" id="trade-symbol" placeholder="BTCUSDT" value="BTCUSDT">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Lado</label>
+                    <div class="btn-group">
+                      <button class="btn btn-buy active" id="btn-buy" onclick="setTradeSide('BUY')">Compra</button>
+                      <button class="btn btn-sell" id="btn-sell" onclick="setTradeSide('SELL')">Venda</button>
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label>Tipo</label>
+                    <select id="trade-type">
+                      <option value="Market">Market</option>
+                      <option value="Limit">Limit</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Quantidade</label>
+                    <input type="number" id="trade-quantity" step="0.001" value="0.001">
+                  </div>
+                  <div class="form-group" id="price-group" style="display:none">
+                    <label>Preço</label>
+                    <input type="number" id="trade-price" step="0.01">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Stop Loss</label>
+                    <input type="number" id="trade-stoploss" step="0.01" placeholder="Opcional">
+                  </div>
+                  <div class="form-group">
+                    <label>Take Profit</label>
+                    <input type="number" id="trade-takeprofit" step="0.01" placeholder="Opcional">
+                  </div>
+                </div>
+                <div class="form-actions center">
+                  <button class="btn btn-buy btn-lg" onclick="executeTrade()">Executar Trade</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" style="margin-top: 16px;">
+            <div class="card-header">
+              <h3>Ordens Abertas</h3>
+            </div>
+            <div class="card-body">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Par</th>
+                    <th>Lado</th>
+                    <th>Tipo</th>
+                    <th>Preço</th>
+                    <th>Qtd</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody id="open-orders-tbody">
+                  <tr><td colspan="6" class="empty-row">Nenhuma ordem aberta</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="trading-sidebar">
+          <div class="card">
+            <div class="card-header">
+              <h3>Recomendação IA</h3>
+            </div>
+            <div class="card-body" id="ai-trade-recommendation">
+              <div class="empty-state">
+                <p>Solicite uma análise para obter recomendação</p>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="requestAIAnalysis()">Solicitar Análise</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- News Page -->
+    <div class="page" id="page-news">
+      <div class="page-header">
+        <h1>Notícias & Sentimento</h1>
+        <button class="btn btn-primary" onclick="loadNews()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Atualizar
+        </button>
+      </div>
+
+      <div class="news-layout">
+        <div class="news-sentiment-panel">
+          <div class="card">
+            <div class="card-header"><h3>Sentimento do Mercado</h3></div>
+            <div class="card-body" id="market-sentiment-body">
+              <div class="sentiment-big-gauge">
+                <div class="gauge-ring">
+                  <svg viewBox="0 0 120 120">
+                    <circle cx="60" cy="60" r="54" fill="none" stroke="#1e2235" stroke-width="8"/>
+                    <circle cx="60" cy="60" r="54" fill="none" stroke="url(#sentGrad)" stroke-width="8" stroke-dasharray="339.29" stroke-dashoffset="170" stroke-linecap="round" transform="rotate(-90 60 60)" id="sentiment-ring"/>
+                    <defs>
+                      <linearGradient id="sentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" style="stop-color:#ff4444"/>
+                        <stop offset="50%" style="stop-color:#ffaa00"/>
+                        <stop offset="100%" style="stop-color:#00ff88"/>
+                      </linearGradient>
+                    </defs>
+                  </svg>
+                  <span class="gauge-number" id="sentiment-score">50</span>
+                </div>
+                <span class="gauge-text" id="sentiment-text">Neutro</span>
+              </div>
+              <div class="sentiment-details" id="sentiment-details"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="news-feed">
+          <div class="card">
+            <div class="card-header"><h3>Feed de Notícias</h3></div>
+            <div class="card-body" id="news-feed-body">
+              <div class="empty-state">
+                <p>Clique em "Atualizar" para carregar notícias</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Risk Page -->
+    <div class="page" id="page-risk">
+      <div class="page-header">
+        <h1>Gerenciamento de Risco</h1>
+      </div>
+
+      <div class="risk-layout">
+        <div class="card">
+          <div class="card-header"><h3>Parâmetros de Risco</h3></div>
+          <div class="card-body">
+            <div class="risk-form">
+              <div class="form-group">
+                <label>Nível Máximo de Risco</label>
+                <div class="risk-selector">
+                  <button class="risk-btn active" data-level="LOW" onclick="setRiskLevel(this)">🟢 Baixo</button>
+                  <button class="risk-btn" data-level="MEDIUM" onclick="setRiskLevel(this)">🟡 Médio</button>
+                  <button class="risk-btn" data-level="HIGH" onclick="setRiskLevel(this)">🟠 Alto</button>
+                  <button class="risk-btn" data-level="EXTREME" onclick="setRiskLevel(this)">🔴 Extremo</button>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Perda Máxima (% do portfólio)</label>
+                  <input type="number" id="max-loss" value="5" min="1" max="50" step="0.5">
+                  <span class="form-hint">Por trade individual</span>
+                </div>
+                <div class="form-group">
+                  <label>Drawdown Máximo (%)</label>
+                  <input type="number" id="max-drawdown" value="15" min="5" max="50" step="1">
+                  <span class="form-hint">Perda máxima total permitida</span>
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Tamanho Máximo de Posição (%)</label>
+                  <input type="number" id="max-position-size" value="10" min="1" max="100" step="1">
+                </div>
+                <div class="form-group">
+                  <label>Trades Diários Máximos</label>
+                  <input type="number" id="max-daily-trades" value="10" min="1" max="100">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Estilo de Investimento</label>
+                  <select id="investment-style">
+                    <option value="conservative">Conservador</option>
+                    <option value="moderate" selected>Moderado</option>
+                    <option value="aggressive">Agressivo</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Cooldown após loss (min)</label>
+                  <input type="number" id="loss-cooldown" value="30" min="0" max="240">
+                </div>
+              </div>
+              <button class="btn btn-primary btn-block" onclick="saveRiskConfig()">Salvar Configurações</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Status de Risco Atual</h3></div>
+          <div class="card-body" id="risk-status-body">
+            <div class="risk-meters">
+              <div class="risk-meter">
+                <div class="risk-meter-label">Risco de Portfólio</div>
+                <div class="risk-meter-bar">
+                  <div class="risk-meter-fill" style="width: 25%; background: #00ff88;" id="portfolio-risk-bar"></div>
+                </div>
+                <span class="risk-meter-value" id="portfolio-risk-val">25%</span>
+              </div>
+              <div class="risk-meter">
+                <div class="risk-meter-label">Drawdown Atual</div>
+                <div class="risk-meter-bar">
+                  <div class="risk-meter-fill" style="width: 10%; background: #00d4ff;" id="drawdown-bar"></div>
+                </div>
+                <span class="risk-meter-value" id="drawdown-val">2.3%</span>
+              </div>
+              <div class="risk-meter">
+                <div class="risk-meter-label">Exposição Total</div>
+                <div class="risk-meter-bar">
+                  <div class="risk-meter-fill" style="width: 40%; background: #7b2ff7;" id="exposure-bar"></div>
+                </div>
+                <span class="risk-meter-value" id="exposure-val">40%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings Page -->
+    <div class="page" id="page-settings">
+      <div class="page-header">
+        <h1>Configurações</h1>
+      </div>
+
+      <div class="settings-grid">
+        <div class="card">
+          <div class="card-header"><h3>Geral</h3></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>Tema</label>
+              <select id="app-theme">
+                <option value="dark">Escuro</option>
+                <option value="midnight">Midnight</option>
+                <option value="cyber">Cyber</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Idioma</label>
+              <select id="app-language">
+                <option value="pt-BR">Português (Brasil)</option>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </div>
+            <div class="form-group checkbox-group">
+              <label><input type="checkbox" id="notify-trades" checked> Notificar trades</label>
+            </div>
+            <div class="form-group checkbox-group">
+              <label><input type="checkbox" id="notify-analysis" checked> Notificar análises</label>
+            </div>
+            <div class="form-group checkbox-group">
+              <label><input type="checkbox" id="sound-alerts" checked> Alertas sonoros</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Log de Atividades</h3></div>
+          <div class="card-body">
+            <div class="activity-log" id="activity-log">
+              <div class="log-entry info">
+                <span class="log-time">--:--:--</span>
+                <span class="log-msg">Aplicativo iniciado</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card card-full">
+          <div class="card-header"><h3>Sobre</h3></div>
+          <div class="card-body">
+            <div class="about-info">
+              <div class="about-logo">
+                <img src="../../build/icon.png" alt="CryptoAI Investor" width="80" height="80">
+              </div>
+              <h2>CryptoAI Investor</h2>
+              <p class="version">v1.0.0</p>
+              <p>Aplicativo de investimento em criptomoedas com inteligência artificial.</p>
+              <p>Suporta Bybit, OKX, Binance e corretoras personalizadas.</p>
+              <p>Integração com DeepSeek, OpenAI, Google AI, NVIDIA, Claude, OpenRouter e APIs personalizadas.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Toast -->
+  <div id="toast-container"></div>
+
+  <script src="js/renderer.js"></script>
+</body>
+</html>

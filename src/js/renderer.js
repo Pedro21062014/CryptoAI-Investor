@@ -1,0 +1,864 @@
+// ===== State Management =====
+const state = {
+  activeExchange: null,
+  activeAI: null,
+  botRunning: false,
+  tradeSide: 'BUY',
+  riskLevel: 'LOW',
+  exchangeConfigs: {},
+  aiConfigs: {},
+  riskConfig: {
+    maxRiskLevel: 'LOW',
+    maxLoss: 5,
+    maxDrawdown: 15,
+    maxPositionSize: 10,
+    maxDailyTrades: 10,
+    investmentStyle: 'moderate',
+    lossCooldown: 30
+  },
+  analysisInterval: null,
+  trades: []
+};
+
+// ===== Navigation =====
+document.addEventListener('DOMContentLoaded', () => {
+  const navItems = document.querySelectorAll('.nav-item');
+  navItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      const page = item.dataset.page;
+      navigateTo(page);
+    });
+  });
+  loadSavedConfig();
+  addLog('info', 'Aplicativo iniciado com sucesso');
+});
+
+function navigateTo(page) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.nav-item[data-page="${page}"]`)?.classList.add('active');
+  document.getElementById(`page-${page}`)?.classList.add('active');
+}
+
+// ===== Exchange Management =====
+async function connectExchange(exchange) {
+  const config = getExchangeConfig(exchange);
+  if (!config.apiKey || !config.apiSecret) {
+    showToast('Preencha API Key e Secret', 'error');
+    return;
+  }
+
+  showToast(`Conectando à ${exchange}...`, 'info');
+  addLog('info', `Tentando conectar à corretora ${exchange}...`);
+
+  try {
+    const result = await window.electronAPI.testConnection(config);
+    if (result.success) {
+      state.exchangeConfigs[exchange] = config;
+      state.activeExchange = exchange;
+      updateExchangeStatus(exchange, true);
+      saveConfig();
+      showToast(`Conectado à ${exchange} com sucesso!`, 'success');
+      addLog('success', `Conexão estabelecida com ${exchange}`);
+      loadBalance(exchange);
+    } else {
+      updateExchangeStatus(exchange, false);
+      showToast(`Erro ao conectar: ${result.error}`, 'error');
+      addLog('error', `Falha na conexão com ${exchange}: ${result.error}`);
+    }
+  } catch (err) {
+    showToast(`Erro: ${err.message}`, 'error');
+    addLog('error', `Exceção ao conectar ${exchange}: ${err.message}`);
+  }
+}
+
+async function testExchange(exchange) {
+  const config = getExchangeConfig(exchange);
+  if (!config.apiKey || !config.apiSecret) {
+    showToast('Preencha API Key e Secret para testar', 'warning');
+    return;
+  }
+
+  showToast(`Testando conexão com ${exchange}...`, 'info');
+
+  try {
+    const result = await window.electronAPI.testConnection(config);
+    if (result.success) {
+      showToast(`Teste de conexão com ${exchange} bem sucedido!`, 'success');
+      addLog('success', `Teste de conexão com ${exchange} OK`);
+    } else {
+      showToast(`Teste falhou: ${result.error}`, 'error');
+      addLog('error', `Teste de conexão com ${exchange} falhou: ${result.error}`);
+    }
+  } catch (err) {
+    showToast(`Erro no teste: ${err.message}`, 'error');
+  }
+}
+
+function getExchangeConfig(exchange) {
+  const config = {
+    exchange: exchange,
+    apiKey: document.getElementById(`${exchange}-apikey`)?.value || '',
+    apiSecret: document.getElementById(`${exchange}-apisecret`)?.value || '',
+    testnet: document.getElementById(`${exchange}-testnet`)?.checked || false
+  };
+
+  if (exchange === 'okx') {
+    config.passphrase = document.getElementById('okx-passphrase')?.value || '';
+  }
+
+  if (exchange === 'custom') {
+    config.baseUrl = document.getElementById('custom-baseurl')?.value || '';
+    config.name = document.getElementById('custom-name')?.value || 'Custom';
+  }
+
+  return config;
+}
+
+function updateExchangeStatus(exchange, connected) {
+  const statusEl = document.getElementById(`${exchange}-status`);
+  if (statusEl) {
+    const dot = statusEl.querySelector('.status-dot');
+    if (connected) {
+      dot.classList.remove('offline');
+      dot.classList.add('online');
+      statusEl.lastChild.textContent = ' Conectado';
+    } else {
+      dot.classList.remove('online');
+      dot.classList.add('offline');
+      statusEl.lastChild.textContent = ' Desconectado';
+    }
+  }
+}
+
+async function loadBalance(exchange) {
+  const config = state.exchangeConfigs[exchange];
+  if (!config) return;
+
+  try {
+    const result = await window.electronAPI.getBalance(config);
+    if (result.success && result.balance) {
+      let totalUsd = 0;
+      result.balance.forEach(coin => {
+        const balance = parseFloat(coin.walletBalance || coin.free || coin.balance || 0);
+        if (balance > 0) {
+          totalUsd += balance;
+        }
+      });
+      document.getElementById('total-balance').textContent = `$${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+  } catch (err) {
+    addLog('error', `Erro ao carregar saldo: ${err.message}`);
+  }
+}
+
+// ===== AI Management =====
+async function connectAI(provider) {
+  const config = getAIConfig(provider);
+  if (!config.apiKey) {
+    showToast('Preencha a API Key', 'error');
+    return;
+  }
+
+  showToast(`Conectando à IA ${provider}...`, 'info');
+  addLog('info', `Testando conexão com ${provider}...`);
+
+  try {
+    const result = await window.electronAPI.aiTestConnection(config);
+    if (result.success) {
+      state.aiConfigs[provider] = config;
+      state.activeAI = provider;
+      saveConfig();
+      showToast(`IA ${provider} conectada com sucesso!`, 'success');
+      addLog('success', `IA ${provider} conectada`);
+      document.getElementById('ai-status-badge').textContent = provider;
+      document.getElementById('ai-status-badge').className = 'badge success';
+    } else {
+      showToast(`Erro: ${result.error}`, 'error');
+      addLog('error', `Falha na conexão com IA ${provider}: ${result.error}`);
+    }
+  } catch (err) {
+    showToast(`Erro: ${err.message}`, 'error');
+    addLog('error', `Exceção ao conectar IA ${provider}: ${err.message}`);
+  }
+}
+
+function getAIConfig(provider) {
+  const config = {
+    provider: provider,
+    apiKey: document.getElementById(`${provider}-apikey`)?.value || '',
+    model: document.getElementById(`${provider}-model`)?.value || 'default',
+    temperature: parseFloat(document.getElementById(`${provider}-temperature`)?.value || 0.3),
+    maxTokens: parseInt(document.getElementById('max-tokens')?.value || 2000)
+  };
+
+  if (provider === 'custom') {
+    config.baseUrl = document.getElementById('custom-ai-baseurl')?.value || '';
+    config.name = document.getElementById('custom-ai-name')?.value || 'Custom AI';
+    config.model = document.getElementById('custom-ai-model')?.value || 'default';
+  }
+
+  return config;
+}
+
+// ===== Bot Control =====
+async function toggleBot() {
+  if (state.botRunning) {
+    stopBot();
+  } else {
+    startBot();
+  }
+}
+
+async function startBot() {
+  if (!state.activeExchange) {
+    showToast('Conecte uma corretora antes de iniciar', 'warning');
+    return;
+  }
+  if (!state.activeAI) {
+    showToast('Configure uma IA antes de iniciar', 'warning');
+    return;
+  }
+
+  state.botRunning = true;
+  updateBotUI();
+  showToast('Bot iniciado! Analisando mercado...', 'success');
+  addLog('success', 'Bot de trading iniciado');
+
+  const intervalMinutes = parseInt(document.getElementById('request-interval')?.value || 5);
+  runAnalysisCycle();
+
+  state.analysisInterval = setInterval(() => {
+    runAnalysisCycle();
+  }, intervalMinutes * 60 * 1000);
+}
+
+function stopBot() {
+  state.botRunning = false;
+  if (state.analysisInterval) {
+    clearInterval(state.analysisInterval);
+    state.analysisInterval = null;
+  }
+  updateBotUI();
+  showToast('Bot parado', 'warning');
+  addLog('warning', 'Bot de trading parado');
+}
+
+function updateBotUI() {
+  const btn = document.getElementById('btn-start-bot');
+  const status = document.getElementById('bot-status');
+
+  if (state.botRunning) {
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Parar Bot';
+    btn.className = 'btn btn-sell';
+    status.innerHTML = '<span class="status-dot online"></span><span class="status-text">Bot Ativo</span>';
+  } else {
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Iniciar Bot';
+    btn.className = 'btn btn-primary';
+    status.innerHTML = '<span class="status-dot offline"></span><span class="status-text">Bot Parado</span>';
+  }
+}
+
+// ===== Analysis Cycle =====
+async function runAnalysisCycle() {
+  if (!state.botRunning) return;
+
+  addLog('info', 'Iniciando ciclo de análise...');
+  showToast('Analisando mercado...', 'info');
+
+  try {
+    // Get market data
+    const pairs = document.getElementById('monitor-pairs')?.value || 'BTCUSDT';
+    const pairList = pairs.split(',').map(p => p.trim());
+
+    let marketData = {};
+    for (const pair of pairList) {
+      const result = await window.electronAPI.getCandlesticks(
+        state.exchangeConfigs[state.activeExchange],
+        pair,
+        '60'
+      );
+      if (result.success) marketData[pair] = result.data;
+    }
+
+    // Get news
+    let newsData = [];
+    try {
+      newsData = await window.electronAPI.getCryptoNews();
+    } catch (e) {
+      addLog('warning', `Erro ao carregar notícias: ${e.message}`);
+    }
+
+    // Get sentiment
+    let sentiment = null;
+    try {
+      sentiment = await window.electronAPI.getMarketSentiment();
+      updateSentimentUI(sentiment);
+    } catch (e) {
+      addLog('warning', `Erro ao carregar sentimento: ${e.message}`);
+    }
+
+    // AI Analysis
+    const aiConfig = { ...state.aiConfigs[state.activeAI], ...state.riskConfig };
+    const analysisResult = await window.electronAPI.aiGetAnalysis(
+      aiConfig,
+      marketData,
+      { news: newsData, sentiment }
+    );
+
+    if (analysisResult.success) {
+      displayAnalysis(analysisResult.analysis, analysisResult.raw);
+      addLog('success', `Análise concluída: ${analysisResult.analysis.recommendation}`);
+
+      // Risk validation
+      const riskResult = await window.electronAPI.calculateRisk(
+        state.riskConfig,
+        { totalValue: 10000, positions: [] },
+        analysisResult.analysis
+      );
+
+      updateRiskUI(riskResult);
+
+      // Auto trade logic
+      const autoTrade = document.getElementById('auto-trade')?.value || 'disabled';
+      if (autoTrade !== 'disabled' && riskResult.allowed) {
+        if (analysisResult.analysis.recommendation === 'BUY' || analysisResult.analysis.recommendation === 'SELL') {
+          if (autoTrade === 'enabled') {
+            executeAITrade(analysisResult.analysis);
+          } else if (autoTrade === 'confirmation') {
+            requestTradeConfirmation(analysisResult.analysis);
+          }
+        }
+      }
+    } else {
+      addLog('error', `Erro na análise: ${analysisResult.error}`);
+      showToast(`Erro na análise IA: ${analysisResult.error}`, 'error');
+    }
+  } catch (err) {
+    addLog('error', `Erro no ciclo de análise: ${err.message}`);
+    showToast(`Erro: ${err.message}`, 'error');
+  }
+}
+
+async function requestAIAnalysis() {
+  if (!state.activeExchange || !state.activeAI) {
+    showToast('Conecte uma corretora e uma IA primeiro', 'warning');
+    return;
+  }
+  await runAnalysisCycle();
+}
+
+// ===== Display Analysis =====
+function displayAnalysis(analysis, raw) {
+  const container = document.getElementById('ai-analysis-content');
+  const rec = analysis.recommendation || 'HOLD';
+  const confidence = analysis.confidence || 50;
+  const risk = analysis.risk_level || 'MEDIUM';
+
+  container.innerHTML = `
+    <div class="analysis-result">
+      <div class="analysis-header">
+        <span class="recommendation-badge ${rec}">${rec}</span>
+        <span class="badge ${risk === 'LOW' ? 'success' : risk === 'HIGH' || risk === 'EXTREME' ? 'error' : 'warning'}">
+          Risco: ${risk}
+        </span>
+      </div>
+      <div class="analysis-details">
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Confiança</div>
+          <div class="analysis-detail-value" style="color: ${confidence > 70 ? 'var(--accent-green)' : confidence > 40 ? 'var(--accent-orange)' : 'var(--accent-red)'}">${confidence}%</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Sentimento</div>
+          <div class="analysis-detail-value">${(analysis.sentiment || 'neutral').toUpperCase()}</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Entrada</div>
+          <div class="analysis-detail-value">${analysis.entry_price ? '$' + analysis.entry_price.toLocaleString() : 'N/A'}</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Target</div>
+          <div class="analysis-detail-value">${analysis.target_price ? '$' + analysis.target_price.toLocaleString() : 'N/A'}</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Stop Loss</div>
+          <div class="analysis-detail-value" style="color: var(--accent-red)">${analysis.stop_loss ? '$' + analysis.stop_loss.toLocaleString() : 'N/A'}</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Timeframe</div>
+          <div class="analysis-detail-value">${(analysis.timeframe || 'medium').toUpperCase()}</div>
+        </div>
+      </div>
+      <div class="analysis-reasoning">
+        <strong>Raciocínio:</strong> ${analysis.reasoning || 'Sem detalhes disponíveis'}
+      </div>
+      ${analysis.factors ? `
+        <div class="analysis-factors">
+          ${analysis.factors.map(f => `<span class="factor-tag">${f}</span>`).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+
+  // Also update trade recommendation sidebar
+  const tradeRec = document.getElementById('ai-trade-recommendation');
+  if (tradeRec) {
+    tradeRec.innerHTML = `
+      <div class="analysis-result" style="padding:0">
+        <div style="text-align:center; margin-bottom:12px">
+          <span class="recommendation-badge ${rec}" style="font-size:20px; padding:10px 24px">${rec}</span>
+        </div>
+        <div class="analysis-detail" style="margin-bottom:8px">
+          <div class="analysis-detail-label">Confiança</div>
+          <div class="analysis-detail-value">${confidence}%</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Risco</div>
+          <div class="analysis-detail-value">${risk}</div>
+        </div>
+        <p style="font-size:12px; color:var(--text-muted); margin-top:12px; line-height:1.5">${(analysis.reasoning || '').substring(0, 200)}...</p>
+      </div>
+    `;
+  }
+}
+
+// ===== Trading =====
+let currentTradeSide = 'BUY';
+
+function setTradeSide(side) {
+  currentTradeSide = side;
+  document.getElementById('btn-buy')?.classList.toggle('active', side === 'BUY');
+  document.getElementById('btn-sell')?.classList.toggle('active', side === 'SELL');
+}
+
+document.getElementById('trade-type')?.addEventListener('change', function() {
+  document.getElementById('price-group').style.display = this.value === 'Limit' ? 'block' : 'none';
+});
+
+async function executeTrade() {
+  const exchange = document.getElementById('trade-exchange')?.value;
+  if (!exchange || !state.exchangeConfigs[exchange]) {
+    showToast('Selecione uma corretora conectada', 'warning');
+    return;
+  }
+
+  const order = {
+    symbol: document.getElementById('trade-symbol')?.value || 'BTCUSDT',
+    side: currentTradeSide,
+    type: document.getElementById('trade-type')?.value || 'Market',
+    quantity: parseFloat(document.getElementById('trade-quantity')?.value || 0),
+    price: document.getElementById('trade-price')?.value ? parseFloat(document.getElementById('trade-price').value) : null
+  };
+
+  if (order.quantity <= 0) {
+    showToast('Quantidade deve ser maior que zero', 'error');
+    return;
+  }
+
+  // Risk validation
+  try {
+    const validation = await window.electronAPI.validateTrade(
+      state.riskConfig,
+      order,
+      { totalValue: 10000, todayTrades: state.trades.length }
+    );
+
+    if (!validation.valid) {
+      showToast(`Trade bloqueado: ${validation.errors.join(', ')}`, 'error');
+      return;
+    }
+
+    if (validation.warnings.length > 0) {
+      validation.warnings.forEach(w => showToast(w, 'warning'));
+      if (validation.adjustedTrade.quantity !== order.quantity) {
+        order.quantity = validation.adjustedTrade.quantity;
+      }
+    }
+  } catch (err) {
+    addLog('warning', `Validação de risco falhou: ${err.message}`);
+  }
+
+  showToast('Executando trade...', 'info');
+  addLog('info', `Executando ${order.side} ${order.quantity} ${order.symbol}...`);
+
+  try {
+    const result = await window.electronAPI.placeOrder(state.exchangeConfigs[exchange], order);
+    if (result.success) {
+      showToast(`Trade executado com sucesso!`, 'success');
+      addLog('success', `Trade executado: ${order.side} ${order.quantity} ${order.symbol}`);
+      state.trades.push({
+        time: new Date(),
+        symbol: order.symbol,
+        side: order.side,
+        price: order.price || 'Market',
+        quantity: order.quantity,
+        status: 'filled'
+      });
+      updateTradesTable();
+    } else {
+      showToast(`Erro no trade: ${result.error}`, 'error');
+      addLog('error', `Falha no trade: ${result.error}`);
+    }
+  } catch (err) {
+    showToast(`Erro: ${err.message}`, 'error');
+    addLog('error', `Exceção no trade: ${err.message}`);
+  }
+}
+
+async function executeAITrade(analysis) {
+  const exchange = state.activeExchange;
+  if (!exchange) return;
+
+  const side = analysis.recommendation === 'BUY' ? 'BUY' : 'SELL';
+  const quantity = 0.001; // Minimum safe quantity
+
+  const order = {
+    symbol: 'BTCUSDT',
+    side: side,
+    type: 'Market',
+    quantity: quantity
+  };
+
+  addLog('info', `[AUTO-TRADE] Executando ${side} ${quantity} BTCUSDT baseado na IA`);
+
+  try {
+    const result = await window.electronAPI.placeOrder(state.exchangeConfigs[exchange], order);
+    if (result.success) {
+      showToast(`Auto-trade executado: ${side} ${quantity} BTCUSDT`, 'success');
+      addLog('success', `[AUTO-TRADE] ${side} ${quantity} BTCUSDT executado`);
+      state.trades.push({
+        time: new Date(),
+        symbol: 'BTCUSDT',
+        side: side,
+        price: 'Market',
+        quantity: quantity,
+        status: 'filled'
+      });
+      updateTradesTable();
+    } else {
+      addLog('error', `[AUTO-TRADE] Falha: ${result.error}`);
+    }
+  } catch (err) {
+    addLog('error', `[AUTO-TRADE] Exceção: ${err.message}`);
+  }
+}
+
+function requestTradeConfirmation(analysis) {
+  const side = analysis.recommendation;
+  const confirmed = confirm(`IA recomenda ${side} com ${analysis.confidence}% de confiança.\nRisco: ${analysis.risk_level}\n\nDeseja executar este trade?`);
+  if (confirmed) {
+    executeAITrade(analysis);
+  } else {
+    addLog('info', `Trade ${side} cancelado pelo usuário`);
+  }
+}
+
+function updateTradesTable() {
+  const tbody = document.getElementById('trades-tbody');
+  if (!tbody) return;
+
+  document.getElementById('daily-trades').textContent = state.trades.length;
+
+  if (state.trades.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-row">Nenhum trade realizado</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = state.trades.slice(-20).reverse().map(t => `
+    <tr>
+      <td style="font-family:var(--font-mono);font-size:12px">${t.time.toLocaleTimeString()}</td>
+      <td><strong>${t.symbol}</strong></td>
+      <td><span class="badge ${t.side === 'BUY' ? 'success' : 'error'}">${t.side}</span></td>
+      <td style="font-family:var(--font-mono)">${t.price}</td>
+      <td style="font-family:var(--font-mono)">${t.quantity}</td>
+      <td>--</td>
+      <td><span class="badge success">${t.status}</span></td>
+    </tr>
+  `).join('');
+}
+
+// ===== News =====
+async function loadNews() {
+  showToast('Carregando notícias...', 'info');
+  addLog('info', 'Carregando feed de notícias...');
+
+  try {
+    const news = await window.electronAPI.getCryptoNews();
+    displayNews(news);
+
+    const sentiment = await window.electronAPI.getMarketSentiment();
+    updateSentimentUI(sentiment);
+
+    showToast('Notícias carregadas!', 'success');
+    addLog('success', `${news.length} itens de notícia carregados`);
+  } catch (err) {
+    showToast(`Erro ao carregar notícias: ${err.message}`, 'error');
+    addLog('error', `Erro nas notícias: ${err.message}`);
+  }
+}
+
+function displayNews(news) {
+  const container = document.getElementById('news-feed-body');
+  if (!container) return;
+
+  const validNews = news.filter(n => !n.error);
+
+  if (validNews.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>Nenhuma notícia disponível</p></div>';
+    return;
+  }
+
+  container.innerHTML = validNews.map(item => `
+    <div class="news-item">
+      <span class="news-source">${item.source}</span>
+      <div class="news-title">${item.title}</div>
+      <div class="news-desc">${item.description || ''}</div>
+      <div class="news-meta">
+        <span class="sentiment-badge ${item.sentiment || 'neutral'}">${item.sentiment || 'neutral'}</span>
+        <span>${new Date(item.timestamp).toLocaleString('pt-BR')}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updateSentimentUI(sentiment) {
+  if (!sentiment) return;
+
+  const score = Math.round(sentiment.score);
+  document.getElementById('sentiment-score').textContent = score;
+  document.getElementById('sentiment-text').textContent =
+    sentiment.overall === 'bullish' ? 'Otimista' :
+    sentiment.overall === 'bearish' ? 'Pessimista' : 'Neutro';
+
+  // Update ring
+  const ring = document.getElementById('sentiment-ring');
+  if (ring) {
+    const circumference = 339.29;
+    const offset = circumference - (score / 100) * circumference;
+    ring.style.strokeDashoffset = offset;
+  }
+
+  // Dashboard gauge
+  document.querySelector('.gauge-value').textContent = score;
+  const gaugeLabel = document.querySelector('.gauge-label');
+  if (gaugeLabel) {
+    gaugeLabel.textContent = sentiment.overall === 'bullish' ? 'Otimista' :
+      sentiment.overall === 'bearish' ? 'Pessimista' : 'Neutro';
+  }
+
+  // Sentiment details
+  const details = document.getElementById('sentiment-details');
+  if (details && sentiment.sources) {
+    let html = '';
+    if (sentiment.sources.coingecko && !sentiment.sources.coingecko.error) {
+      const cg = sentiment.sources.coingecko;
+      html += `<div class="sentiment-row"><span class="sentiment-row-label">Market Cap Change 24h</span><span class="sentiment-row-value">${(cg.market_cap_change_24h || 0).toFixed(2)}%</span></div>`;
+      html += `<div class="sentiment-row"><span class="sentiment-row-label">BTC Dominance</span><span class="sentiment-row-value">${(cg.btc_dominance || 0).toFixed(1)}%</span></div>`;
+    }
+    if (sentiment.sources.fearGreed && !sentiment.sources.fearGreed.error) {
+      const fg = sentiment.sources.fearGreed;
+      html += `<div class="sentiment-row"><span class="sentiment-row-label">Fear & Greed</span><span class="sentiment-row-value">${fg.value} (${fg.classification})</span></div>`;
+    }
+    details.innerHTML = html;
+  }
+}
+
+// ===== Market Data =====
+async function loadMarketData() {
+  if (!state.activeExchange) {
+    showToast('Conecte uma corretora primeiro', 'warning');
+    return;
+  }
+
+  try {
+    const result = await window.electronAPI.getMarkets(state.exchangeConfigs[state.activeExchange]);
+    if (result.success) {
+      displayMarketData(result.data);
+    }
+  } catch (err) {
+    addLog('error', `Erro ao carregar mercado: ${err.message}`);
+  }
+}
+
+function displayMarketData(data) {
+  const container = document.getElementById('market-data-content');
+  if (!container) return;
+
+  // Parse based on exchange
+  let markets = [];
+  try {
+    if (state.activeExchange === 'binance') {
+      markets = data.slice(0, 10).map(m => ({
+        symbol: m.symbol,
+        price: parseFloat(m.lastPrice),
+        change: parseFloat(m.priceChangePercent)
+      }));
+    } else if (state.activeExchange === 'bybit') {
+      const list = data?.result?.list || [];
+      markets = list.slice(0, 10).map(m => ({
+        symbol: m.symbol,
+        price: parseFloat(m.lastPrice),
+        change: parseFloat(m.price24hPcnt) * 100
+      }));
+    }
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state"><p>Erro ao processar dados</p></div>';
+    return;
+  }
+
+  if (markets.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>Nenhum dado disponível</p></div>';
+    return;
+  }
+
+  container.innerHTML = markets.map(m => `
+    <div class="market-item">
+      <div>
+        <div class="market-name">${m.symbol}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="market-price">$${m.price.toLocaleString()}</div>
+        <div class="market-change ${m.change >= 0 ? 'positive' : 'negative'}">${m.change >= 0 ? '+' : ''}${m.change.toFixed(2)}%</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ===== Risk Management =====
+function setRiskLevel(btn) {
+  document.querySelectorAll('.risk-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  state.riskConfig.maxRiskLevel = btn.dataset.level;
+}
+
+function saveRiskConfig() {
+  state.riskConfig.maxLoss = parseFloat(document.getElementById('max-loss')?.value || 5);
+  state.riskConfig.maxDrawdown = parseFloat(document.getElementById('max-drawdown')?.value || 15);
+  state.riskConfig.maxPositionSize = parseFloat(document.getElementById('max-position-size')?.value || 10);
+  state.riskConfig.maxDailyTrades = parseInt(document.getElementById('max-daily-trades')?.value || 10);
+  state.riskConfig.investmentStyle = document.getElementById('investment-style')?.value || 'moderate';
+  state.riskConfig.lossCooldown = parseInt(document.getElementById('loss-cooldown')?.value || 30);
+
+  saveConfig();
+  showToast('Configurações de risco salvas!', 'success');
+  addLog('success', 'Configurações de risco atualizadas');
+}
+
+function updateRiskUI(riskResult) {
+  const riskScore = riskResult.riskScore || 25;
+  document.getElementById('current-risk').textContent =
+    riskScore < 30 ? 'Baixo' : riskScore < 60 ? 'Médio' : riskScore < 80 ? 'Alto' : 'Extremo';
+
+  // Update risk bars
+  const portfolioRiskBar = document.getElementById('portfolio-risk-bar');
+  if (portfolioRiskBar) {
+    portfolioRiskBar.style.width = `${riskScore}%`;
+    portfolioRiskBar.style.background =
+      riskScore < 30 ? 'var(--accent-green)' :
+      riskScore < 60 ? 'var(--accent-cyan)' :
+      riskScore < 80 ? 'var(--accent-orange)' : 'var(--accent-red)';
+  }
+
+  if (document.getElementById('portfolio-risk-val')) {
+    document.getElementById('portfolio-risk-val').textContent = `${riskScore}%`;
+  }
+}
+
+// ===== Config Persistence =====
+function saveConfig() {
+  try {
+    const config = {
+      exchangeConfigs: state.exchangeConfigs,
+      aiConfigs: state.aiConfigs,
+      riskConfig: state.riskConfig,
+      activeExchange: state.activeExchange,
+      activeAI: state.activeAI
+    };
+    localStorage.setItem('cryptoai-config', JSON.stringify(config));
+  } catch (e) {
+    // Ignore storage errors
+  }
+}
+
+function loadSavedConfig() {
+  try {
+    const saved = localStorage.getItem('cryptoai-config');
+    if (saved) {
+      const config = JSON.parse(saved);
+      if (config.riskConfig) Object.assign(state.riskConfig, config.riskConfig);
+      if (config.activeExchange) state.activeExchange = config.activeExchange;
+      if (config.activeAI) state.activeAI = config.activeAI;
+
+      // Restore exchange statuses
+      if (config.exchangeConfigs) {
+        state.exchangeConfigs = config.exchangeConfigs;
+        Object.keys(config.exchangeConfigs).forEach(ex => {
+          updateExchangeStatus(ex, true);
+          const conf = config.exchangeConfigs[ex];
+          if (document.getElementById(`${ex}-apikey`)) {
+            document.getElementById(`${ex}-apikey`).value = conf.apiKey || '';
+            document.getElementById(`${ex}-apisecret`).value = conf.apiSecret || '';
+          }
+        });
+      }
+
+      if (config.aiConfigs) {
+        state.aiConfigs = config.aiConfigs;
+        Object.keys(config.aiConfigs).forEach(prov => {
+          const conf = config.aiConfigs[prov];
+          if (document.getElementById(`${prov}-apikey`)) {
+            document.getElementById(`${prov}-apikey`).value = conf.apiKey || '';
+          }
+        });
+        if (state.activeAI) {
+          document.getElementById('ai-status-badge').textContent = state.activeAI;
+          document.getElementById('ai-status-badge').className = 'badge success';
+        }
+      }
+
+      // Restore risk form
+      if (config.riskConfig) {
+        if (document.getElementById('max-loss')) document.getElementById('max-loss').value = config.riskConfig.maxLoss || 5;
+        if (document.getElementById('max-drawdown')) document.getElementById('max-drawdown').value = config.riskConfig.maxDrawdown || 15;
+        if (document.getElementById('max-position-size')) document.getElementById('max-position-size').value = config.riskConfig.maxPositionSize || 10;
+        if (document.getElementById('max-daily-trades')) document.getElementById('max-daily-trades').value = config.riskConfig.maxDailyTrades || 10;
+        if (document.getElementById('investment-style')) document.getElementById('investment-style').value = config.riskConfig.investmentStyle || 'moderate';
+        if (document.getElementById('loss-cooldown')) document.getElementById('loss-cooldown').value = config.riskConfig.lossCooldown || 30;
+      }
+
+      addLog('info', 'Configurações salvas restauradas');
+    }
+  } catch (e) {
+    // Ignore
+  }
+}
+
+// ===== Utilities =====
+function showToast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 4500);
+}
+
+function addLog(type, message) {
+  const log = document.getElementById('activity-log');
+  if (!log) return;
+
+  const entry = document.createElement('div');
+  entry.className = `log-entry ${type}`;
+  const time = new Date().toLocaleTimeString('pt-BR');
+  entry.innerHTML = `<span class="log-time">${time}</span><span class="log-msg">${message}</span>`;
+  log.insertBefore(entry, log.firstChild);
+
+  // Keep max 100 entries
+  while (log.children.length > 100) {
+    log.removeChild(log.lastChild);
+  }
+}

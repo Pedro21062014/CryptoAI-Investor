@@ -1,0 +1,68 @@
+{
+  "name": "crypto-ai-investor",
+  "version": "1.0.0",
+  "description": "AI-Powered Crypto Investment Desktop Application",
+  "main": "main.js",
+  "author": "CryptoAI Investor",
+  "homepage": "https://crypto-ai-investor.app",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder --win --linux"
+  },
+  "build": {
+    "appId": "com.cryptoai.investor",
+    "productName": "CryptoAI Investor",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "build/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png",
+      "sign": false,
+      "signAndEditExecutable": false
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Finance",
+      "maintainer": "CryptoAI Investor"
+    },
+    "extraResources": [
+      {
+        "from": "src/assets",
+        "to": "assets"
+      }
+    ]
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "node-schedule": "^2.1.1",
+    "crypto-js": "^4.2.0",
+    "ws": "^8.17.0",
+    "electron-store": "^8.2.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}
