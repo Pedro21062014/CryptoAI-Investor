@@ -24,7 +24,10 @@ const state = {
     tokensUsed: 0,
     estimatedCost: 0,
     lastAnalysis: null
-  }
+  },
+  totalBalance: 0,
+  balanceDetails: [],
+  balanceRefreshInterval: null
 };
 
 // ===== Navigation =====
@@ -71,6 +74,13 @@ async function connectExchange(exchange) {
       showToast(`Conectado à ${exchange} com sucesso!`, 'success');
       addLog('success', `Conexão estabelecida com ${exchange}`);
       loadBalance(exchange);
+      // Set up balance auto-refresh
+      if (state.balanceRefreshInterval) clearInterval(state.balanceRefreshInterval);
+      state.balanceRefreshInterval = setInterval(() => {
+        if (state.activeExchange && state.exchangeConfigs[state.activeExchange]) {
+          loadBalance(state.activeExchange);
+        }
+      }, 60000);
     } else {
       updateExchangeStatus(exchange, false);
       showToast(`Erro ao conectar: ${result.error}`, 'error');
@@ -148,17 +158,86 @@ async function loadBalance(exchange) {
   try {
     const result = await window.electronAPI.getBalance(config);
     if (result.success && result.balance) {
+      // Use totalEquity from exchange if available (Bybit, OKX provide this directly)
+      // Otherwise sum up USD values of each coin
       let totalUsd = 0;
-      result.balance.forEach(coin => {
-        const balance = parseFloat(coin.walletBalance || coin.free || coin.balance || 0);
-        if (balance > 0) {
-          totalUsd += balance;
-        }
-      });
+
+      if (result.totalEquity && result.totalEquity > 0) {
+        totalUsd = result.totalEquity;
+      } else {
+        // Sum up USD values from each coin
+        result.balance.forEach(coin => {
+          const usdVal = parseFloat(coin.usdValue || 0);
+          if (usdVal > 0) {
+            totalUsd += usdVal;
+          } else {
+            // Fallback: for stablecoins, use walletBalance as USD value
+            const coinName = (coin.coin || coin.asset || '').toUpperCase();
+            const bal = parseFloat(coin.walletBalance || coin.free || 0);
+            if (['USDT', 'USDC', 'BUSD', 'TUSD', 'USD'].includes(coinName) && bal > 0) {
+              totalUsd += bal;
+            }
+          }
+        });
+      }
+
+      // Save balance to state and cache
+      state.totalBalance = totalUsd;
+      state.balanceDetails = result.balance;
+
       document.getElementById('total-balance').textContent = `$${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+      // Also update balance details in the market card
+      displayBalanceDetails(result.balance, result.exchange || exchange);
+
+      addLog('info', `Saldo carregado: $${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      saveConfig();
+    } else if (result.success && (!result.balance || result.balance.length === 0)) {
+      document.getElementById('total-balance').textContent = '$0.00';
+      addLog('info', 'Nenhum saldo encontrado na conta');
+    } else if (!result.success) {
+      addLog('error', `Erro ao carregar saldo: ${result.error || 'Erro desconhecido'}`);
     }
   } catch (err) {
     addLog('error', `Erro ao carregar saldo: ${err.message}`);
+  }
+}
+
+function displayBalanceDetails(balance, exchange) {
+  const container = document.getElementById('market-data-content');
+  if (!container || !balance || balance.length === 0) return;
+
+  const sorted = [...balance].sort((a, b) => (b.usdValue || 0) - (a.usdValue || 0));
+
+  container.innerHTML = `
+    <div style="margin-bottom:8px;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">
+      Saldos (${exchange})
+    </div>
+    ${sorted.slice(0, 15).map(coin => {
+      const coinName = coin.coin || coin.asset || '???';
+      const amount = parseFloat(coin.walletBalance || coin.free || 0);
+      const usd = parseFloat(coin.usdValue || 0);
+      const free = parseFloat(coin.free || 0);
+      return `
+        <div class="market-item">
+          <div>
+            <div class="market-name">${coinName}</div>
+            <div style="font-size:11px;color:var(--text-muted);">${amount < 0.001 ? amount.toExponential(2) : amount.toLocaleString('en-US', {maximumFractionDigits: 8})} ${coinName}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="market-price">$${usd.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+            ${free > 0 && free !== amount ? `<div class="market-change positive" style="font-size:10px">Disponível: ${free.toLocaleString('en-US', {maximumFractionDigits: 6})}</div>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('')}
+  `;
+}
+
+async function refreshAllBalances() {
+  const exchanges = Object.keys(state.exchangeConfigs);
+  for (const ex of exchanges) {
+    await loadBalance(ex);
   }
 }
 
@@ -1039,7 +1118,9 @@ function saveConfig() {
       activeAI: state.activeAI,
       trades: state.trades,
       aiMetrics: state.aiMetrics,
-      modelSelections: modelSelections
+      modelSelections: modelSelections,
+      totalBalance: state.totalBalance,
+      balanceDetails: state.balanceDetails
     };
     localStorage.setItem('cryptoai-config', JSON.stringify(config));
   } catch (e) {
@@ -1121,7 +1202,27 @@ function loadSavedConfig() {
         });
       }
 
+      // Restore saved balance
+      if (config.totalBalance) {
+        state.totalBalance = config.totalBalance;
+        document.getElementById('total-balance').textContent = `$${config.totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+
       addLog('info', 'Configurações salvas restauradas');
+
+      // Auto-load balance from connected exchange after a short delay
+      if (state.activeExchange && state.exchangeConfigs[state.activeExchange]) {
+        setTimeout(() => {
+          loadBalance(state.activeExchange);
+        }, 2000);
+        // Set up auto-refresh every 60 seconds
+        if (state.balanceRefreshInterval) clearInterval(state.balanceRefreshInterval);
+        state.balanceRefreshInterval = setInterval(() => {
+          if (state.activeExchange && state.exchangeConfigs[state.activeExchange]) {
+            loadBalance(state.activeExchange);
+          }
+        }, 60000);
+      }
     }
   } catch (e) {
     // Ignore

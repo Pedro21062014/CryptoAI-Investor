@@ -47,8 +47,24 @@ const exchanges = {
           }
         });
         if (response.data.retCode === 0) {
-          const coins = response.data.result.list?.[0]?.coin || [];
-          return { success: true, balance: coins.filter(c => parseFloat(c.walletBalance) > 0) };
+          const account = response.data.result.list?.[0] || {};
+          const coins = (account.coin || []).filter(c => parseFloat(c.walletBalance) > 0);
+          // Bybit v5 returns usdValue for each coin and totalAvailableBalance for account
+          const totalEquity = parseFloat(account.totalEquity || account.totalAvailableBalance || '0');
+          const balanceItems = coins.map(c => ({
+            coin: c.coin,
+            walletBalance: parseFloat(c.walletBalance || '0'),
+            usdValue: parseFloat(c.usdValue || c.walletBalance || '0'),
+            free: parseFloat(c.free || c.availableToWithdraw || '0'),
+            locked: parseFloat(c.locked || '0'),
+            unrealisedPnl: parseFloat(c.unrealisedPnl || '0')
+          }));
+          return {
+            success: true,
+            balance: balanceItems,
+            totalEquity: totalEquity,
+            exchange: 'bybit'
+          };
         }
         return { success: false, error: response.data.retMsg };
       } catch (err) {
@@ -158,7 +174,23 @@ const exchanges = {
           }
         });
         if (response.data.code === '0') {
-          return { success: true, balance: response.data.data?.[0]?.details || [] };
+          const account = response.data.data?.[0] || {};
+          const details = account.details || [];
+          const totalEq = parseFloat(account.totalEq || '0');
+          const balanceItems = details.map(d => ({
+            coin: d.ccy,
+            walletBalance: parseFloat(d.eq || '0'),
+            usdValue: parseFloat(d.eqUsd || d.eq || '0'),
+            free: parseFloat(d.availBal || d.cashBal || '0'),
+            locked: parseFloat(d.frozenBal || '0'),
+            unrealisedPnl: parseFloat(d.upl || '0')
+          })).filter(b => b.walletBalance > 0);
+          return {
+            success: true,
+            balance: balanceItems,
+            totalEquity: totalEq,
+            exchange: 'okx'
+          };
         }
         return { success: false, error: response.data.msg };
       } catch (err) {
@@ -254,8 +286,50 @@ const exchanges = {
         const response = await axios.get(`${base}/api/v3/account?${params}&signature=${signature}`, {
           headers: { 'X-MBX-APIKEY': config.apiKey }
         });
-        const balances = response.data.balances?.filter(b => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0) || [];
-        return { success: true, balance: balances };
+        const rawBalances = response.data.balances?.filter(b => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0) || [];
+        
+        // Try to get prices for USD conversion
+        let priceMap = {};
+        try {
+          const priceRes = await axios.get(`${base}/api/v3/ticker/price`);
+          if (Array.isArray(priceRes.data)) {
+            priceRes.data.forEach(t => { priceMap[t.symbol] = parseFloat(t.price); });
+          }
+        } catch (e) { /* ignore price fetch errors */ }
+        
+        const balanceItems = rawBalances.map(b => {
+          const asset = b.asset;
+          const free = parseFloat(b.free || '0');
+          const locked = parseFloat(b.locked || '0');
+          const total = free + locked;
+          let usdValue = 0;
+          if (asset === 'USDT' || asset === 'BUSD' || asset === 'USDC' || asset === 'TUSD') {
+            usdValue = total;
+          } else if (priceMap[`${asset}USDT`]) {
+            usdValue = total * priceMap[`${asset}USDT`];
+          } else if (priceMap[`${asset}BUSD`]) {
+            usdValue = total * priceMap[`${asset}BUSD`];
+          } else if (asset === 'BTC' && priceMap['BTCUSDT']) {
+            usdValue = total * priceMap['BTCUSDT'];
+          } else if (asset === 'ETH' && priceMap['ETHUSDT']) {
+            usdValue = total * priceMap['ETHUSDT'];
+          }
+          return {
+            coin: asset,
+            walletBalance: total,
+            usdValue: usdValue,
+            free: free,
+            locked: locked
+          };
+        });
+        
+        const totalEquity = balanceItems.reduce((sum, b) => sum + b.usdValue, 0);
+        return {
+          success: true,
+          balance: balanceItems,
+          totalEquity: totalEquity,
+          exchange: 'binance'
+        };
       } catch (err) {
         return { success: false, error: err.message };
       }
