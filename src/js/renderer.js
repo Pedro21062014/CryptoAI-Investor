@@ -174,7 +174,7 @@ async function loadBalance(exchange) {
             // Fallback: for stablecoins, use walletBalance as USD value
             const coinName = (coin.coin || coin.asset || '').toUpperCase();
             const bal = parseFloat(coin.walletBalance || coin.free || 0);
-            if (['USDT', 'USDC', 'BUSD', 'TUSD', 'USD'].includes(coinName) && bal > 0) {
+            if (['USDT', 'USDC', 'BUSD', 'TUSD', 'USD', 'DAI'].includes(coinName) && bal > 0) {
               totalUsd += bal;
             }
           }
@@ -185,20 +185,29 @@ async function loadBalance(exchange) {
       state.totalBalance = totalUsd;
       state.balanceDetails = result.balance;
 
-      document.getElementById('total-balance').textContent = `$${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      const balanceEl = document.getElementById('total-balance');
+      if (balanceEl) {
+        balanceEl.textContent = `$${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
 
       // Also update balance details in the market card
       displayBalanceDetails(result.balance, result.exchange || exchange);
 
-      addLog('info', `Saldo carregado: $${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      addLog('info', `Saldo carregado de ${exchange}: $${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
       saveConfig();
     } else if (result.success && (!result.balance || result.balance.length === 0)) {
-      document.getElementById('total-balance').textContent = '$0.00';
+      const balanceEl = document.getElementById('total-balance');
+      if (balanceEl) balanceEl.textContent = '$0.00';
       addLog('info', 'Nenhum saldo encontrado na conta');
     } else if (!result.success) {
-      addLog('error', `Erro ao carregar saldo: ${result.error || 'Erro desconhecido'}`);
+      const balanceEl = document.getElementById('total-balance');
+      if (balanceEl) balanceEl.textContent = '$0.00';
+      addLog('error', `Erro ao carregar saldo de ${exchange}: ${result.error || 'Erro desconhecido'}`);
+      showToast(`Erro saldo ${exchange}: ${result.error || 'Erro desconhecido'}`, 'error');
     }
   } catch (err) {
+    const balanceEl = document.getElementById('total-balance');
+    if (balanceEl) balanceEl.textContent = '$0.00';
     addLog('error', `Erro ao carregar saldo: ${err.message}`);
   }
 }

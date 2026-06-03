@@ -258,22 +258,37 @@ const exchanges = {
     baseUrl: 'https://api.binance.com',
     testnetUrl: 'https://testnet.binance.vision',
 
-    sign(secret, params) {
-      return crypto.createHmac('sha256', secret).update(params).digest('hex');
+    sign(secret, queryString) {
+      return crypto.createHmac('sha256', secret).update(queryString).digest('hex');
+    },
+
+    buildQueryString(params) {
+      // Build a properly sorted query string from params object
+      const keys = Object.keys(params).sort();
+      return keys.map(k => `${k}=${params[k]}`).join('&');
     },
 
     async testConnection(config) {
       try {
         const base = config.testnet ? this.testnetUrl : this.baseUrl;
         const timestamp = Date.now();
-        const params = `timestamp=${timestamp}`;
-        const signature = this.sign(config.apiSecret, params);
-        const response = await axios.get(`${base}/api/v3/account?${params}&signature=${signature}`, {
-          headers: { 'X-MBX-APIKEY': config.apiKey }
+        const params = {
+          timestamp: timestamp,
+          recvWindow: 60000
+        };
+        const queryString = this.buildQueryString(params);
+        const signature = this.sign(config.apiSecret, queryString);
+        const url = `${base}/api/v3/account?${queryString}&signature=${signature}`;
+        const response = await axios.get(url, {
+          headers: {
+            'X-MBX-APIKEY': config.apiKey,
+            'Content-Type': 'application/json'
+          }
         });
         return { success: true, data: response.data };
       } catch (err) {
-        return { success: false, error: err.message };
+        const errMsg = err.response?.data?.msg || err.response?.data?.code || err.message;
+        return { success: false, error: `Binance 401: ${errMsg}` };
       }
     },
 
@@ -281,10 +296,18 @@ const exchanges = {
       try {
         const base = config.testnet ? this.testnetUrl : this.baseUrl;
         const timestamp = Date.now();
-        const params = `timestamp=${timestamp}`;
-        const signature = this.sign(config.apiSecret, params);
-        const response = await axios.get(`${base}/api/v3/account?${params}&signature=${signature}`, {
-          headers: { 'X-MBX-APIKEY': config.apiKey }
+        const params = {
+          timestamp: timestamp,
+          recvWindow: 60000
+        };
+        const queryString = this.buildQueryString(params);
+        const signature = this.sign(config.apiSecret, queryString);
+        const url = `${base}/api/v3/account?${queryString}&signature=${signature}`;
+        const response = await axios.get(url, {
+          headers: {
+            'X-MBX-APIKEY': config.apiKey,
+            'Content-Type': 'application/json'
+          }
         });
         const rawBalances = response.data.balances?.filter(b => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0) || [];
         
@@ -309,10 +332,16 @@ const exchanges = {
             usdValue = total * priceMap[`${asset}USDT`];
           } else if (priceMap[`${asset}BUSD`]) {
             usdValue = total * priceMap[`${asset}BUSD`];
+          } else if (priceMap[`${asset}USDC`]) {
+            usdValue = total * priceMap[`${asset}USDC`];
           } else if (asset === 'BTC' && priceMap['BTCUSDT']) {
             usdValue = total * priceMap['BTCUSDT'];
           } else if (asset === 'ETH' && priceMap['ETHUSDT']) {
             usdValue = total * priceMap['ETHUSDT'];
+          } else if (asset === 'BNB' && priceMap['BNBUSDT']) {
+            usdValue = total * priceMap['BNBUSDT'];
+          } else if (asset === 'SOL' && priceMap['SOLUSDT']) {
+            usdValue = total * priceMap['SOLUSDT'];
           }
           return {
             coin: asset,
@@ -331,7 +360,8 @@ const exchanges = {
           exchange: 'binance'
         };
       } catch (err) {
-        return { success: false, error: err.message };
+        const errMsg = err.response?.data?.msg || err.response?.data?.code || err.message;
+        return { success: false, error: `Binance: ${errMsg}` };
       }
     },
 
@@ -349,15 +379,31 @@ const exchanges = {
       try {
         const base = config.testnet ? this.testnetUrl : this.baseUrl;
         const timestamp = Date.now();
-        let params = `symbol=${order.symbol}&side=${order.side}&type=${order.type || 'MARKET'}&quantity=${order.quantity}&timestamp=${timestamp}`;
-        if (order.price) params += `&price=${order.price}&timeInForce=GTC`;
-        const signature = this.sign(config.apiSecret, params);
-        const response = await axios.post(`${base}/api/v3/order?${params}&signature=${signature}`, {}, {
-          headers: { 'X-MBX-APIKEY': config.apiKey }
+        const params = {
+          symbol: order.symbol,
+          side: order.side,
+          type: order.type || 'MARKET',
+          quantity: order.quantity,
+          timestamp: timestamp,
+          recvWindow: 60000
+        };
+        if (order.price) {
+          params.price = order.price;
+          params.timeInForce = 'GTC';
+        }
+        const queryString = this.buildQueryString(params);
+        const signature = this.sign(config.apiSecret, queryString);
+        const url = `${base}/api/v3/order?${queryString}&signature=${signature}`;
+        const response = await axios.post(url, {}, {
+          headers: {
+            'X-MBX-APIKEY': config.apiKey,
+            'Content-Type': 'application/json'
+          }
         });
         return { success: true, data: response.data };
       } catch (err) {
-        return { success: false, error: err.message };
+        const errMsg = err.response?.data?.msg || err.message;
+        return { success: false, error: errMsg };
       }
     },
 
