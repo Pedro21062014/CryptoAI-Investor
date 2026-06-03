@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -8,9 +8,15 @@ let isQuitting = false;
 let runOnStartup = false;
 let allowBackground = true; // Default: allow running in background
 
-// Config file path for persistent settings
-const configDir = path.join(app.getPath('userData'), 'config');
+// Config/cache paths for persistent settings and API debug cache
+const appDataDir = app.getPath('userData');
+const configDir = path.join(appDataDir, 'config');
+const apiCacheDir = path.join(appDataDir, 'cache');
+process.env.CRYPTOAI_CACHE_DIR = apiCacheDir;
 const settingsPath = path.join(configDir, 'settings.json');
+
+// Saves sanitized request/response JSON for all axios API calls in the local cache folder.
+require('./src/js/api-cache').installAxiosCache();
 
 function loadSettings() {
   try {
@@ -141,6 +147,12 @@ function setAutoStart(enabled) {
 // IPC Handlers
 ipcMain.handle('get-app-path', () => app.getAppPath());
 ipcMain.handle('get-assets-path', () => path.join(app.getAppPath(), 'src', 'assets'));
+ipcMain.handle('cache:get-path', () => apiCacheDir);
+ipcMain.handle('cache:open-folder', async () => {
+  if (!fs.existsSync(apiCacheDir)) fs.mkdirSync(apiCacheDir, { recursive: true });
+  const result = await shell.openPath(apiCacheDir);
+  return { success: !result, error: result || null, path: apiCacheDir };
+});
 
 // Exchange API handlers
 const exchangeHandlers = require('./src/js/exchanges');

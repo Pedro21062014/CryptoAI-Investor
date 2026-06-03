@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // App
   getAppPath: () => ipcRenderer.invoke('get-app-path'),
   getAssetsPath: () => ipcRenderer.invoke('get-assets-path'),
+  getCachePath: () => ipcRenderer.invoke('cache:get-path'),
+  openCacheFolder: () => ipcRenderer.invoke('cache:open-folder'),
 
   // Window controls
   minimize: () => ipcRenderer.invoke('window:minimize'),

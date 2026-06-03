@@ -44,7 +44,19 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSavedTheme();
   loadAnalysisHistory();
   addLog('info', 'Aplicativo iniciado com sucesso');
+  showApiCachePath();
 });
+
+async function showApiCachePath() {
+  try {
+    if (window.electronAPI?.getCachePath) {
+      const cachePath = await window.electronAPI.getCachePath();
+      addLog('info', `Cache de API ativo em: ${cachePath}`);
+    }
+  } catch (e) {
+    // Ignore cache path errors
+  }
+}
 
 function navigateTo(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -1919,6 +1931,23 @@ async function toggleAllowBackground(enabled) {
     }
   } catch (e) {
     showToast('Erro ao configurar segundo plano: ' + e.message, 'error');
+  }
+}
+
+
+async function openApiCacheFolder() {
+  try {
+    if (window.electronAPI?.openCacheFolder) {
+      const result = await window.electronAPI.openCacheFolder();
+      if (result.success) {
+        showToast('Pasta cache aberta', 'success');
+        addLog('info', `Pasta cache aberta: ${result.path}`);
+      } else {
+        showToast('Erro ao abrir cache: ' + (result.error || 'erro desconhecido'), 'error');
+      }
+    }
+  } catch (e) {
+    showToast('Erro ao abrir cache: ' + e.message, 'error');
   }
 }
 
