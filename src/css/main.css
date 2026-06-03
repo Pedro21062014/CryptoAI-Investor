@@ -1943,3 +1943,519 @@ input, select, button { font-family: var(--font-primary); }
 @media (max-width: 900px) {
   .bot-config-grid { grid-template-columns: 1fr; }
 }
+
+/* ===== CryptoBot Beta Styles ===== */
+.beta-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-orange), var(--accent-red));
+  color: white;
+  letter-spacing: 0.5px;
+  vertical-align: middle;
+  margin-left: 6px;
+}
+
+.beta-badge-lg {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-orange), var(--accent-red));
+  color: white;
+  letter-spacing: 0.5px;
+  vertical-align: middle;
+  margin-left: 8px;
+  text-transform: uppercase;
+}
+
+.bot-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Bot Not Installed Screen */
+.bot-not-installed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 500px;
+  animation: fadeIn 0.4s ease;
+}
+
+.bot-install-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 520px;
+  gap: 16px;
+}
+
+.bot-install-prompt-icon {
+  color: var(--accent-cyan);
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+.bot-install-prompt h2 {
+  font-size: 26px;
+  font-weight: 800;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  display: flex;
+  align-items: center;
+}
+
+.bot-install-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 440px;
+}
+
+.bot-install-info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  width: 100%;
+  margin: 12px 0;
+}
+
+.bot-install-info-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  gap: 4px;
+}
+
+.bot-install-info-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+
+.bot-install-info-value {
+  font-size: 16px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+}
+
+.bot-install-capabilities {
+  text-align: left;
+  width: 100%;
+  padding: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin: 8px 0;
+}
+
+.bot-install-capabilities h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bot-install-capabilities ul {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.bot-install-capabilities li {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 0;
+  padding-left: 16px;
+  position: relative;
+  line-height: 1.4;
+}
+
+.bot-install-capabilities li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--accent-green);
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.bot-install-warning {
+  font-size: 12px;
+  color: var(--accent-orange);
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+/* Bot Installation Screen */
+.bot-install-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 500px;
+  animation: fadeIn 0.4s ease;
+}
+
+.bot-install-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  max-width: 480px;
+  gap: 16px;
+  padding: 40px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+.bot-install-icon {
+  color: var(--accent-cyan);
+  animation: pulse 2s infinite;
+}
+
+.bot-install-card h2 {
+  font-size: 22px;
+  font-weight: 700;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bot-install-size {
+  font-size: 13px;
+  color: var(--accent-orange);
+  font-weight: 600;
+}
+
+/* Progress Bar */
+.bot-progress-container {
+  width: 100%;
+  margin: 12px 0;
+}
+
+.bot-progress-bar {
+  width: 100%;
+  height: 10px;
+  background: var(--bg-input);
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.bot-progress-fill {
+  height: 100%;
+  background: var(--gradient-primary);
+  border-radius: 5px;
+  transition: width 0.2s ease;
+  box-shadow: 0 0 12px rgba(0,212,255,0.3);
+}
+
+.bot-progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.bot-progress-info span:first-child {
+  font-weight: 700;
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+}
+
+/* Install Steps */
+.bot-install-steps {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.bot-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-input);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  transition: all var(--transition-fast);
+}
+
+.bot-step.pending {
+  opacity: 0.5;
+}
+
+.bot-step.active {
+  color: var(--accent-cyan);
+  border-color: rgba(0,212,255,0.2);
+  background: rgba(0,212,255,0.06);
+  opacity: 1;
+}
+
+.bot-step.done {
+  color: var(--accent-green);
+  opacity: 1;
+}
+
+.bot-step-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.bot-step.done .bot-step-icon {
+  color: var(--accent-green);
+}
+
+.bot-step.active .bot-step-icon {
+  color: var(--accent-cyan);
+  animation: pulse 1.5s infinite;
+}
+
+/* Bot Mode Selector */
+.bot-mode-selector {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.bot-mode-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 24px 16px;
+  background: var(--bg-card);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  gap: 12px;
+}
+
+.bot-mode-card:hover {
+  border-color: rgba(0,212,255,0.3);
+  background: var(--bg-card-hover);
+  transform: translateY(-2px);
+}
+
+.bot-mode-card.active {
+  border-color: var(--accent-cyan);
+  box-shadow: var(--shadow-glow-cyan);
+  background: var(--gradient-glow);
+}
+
+.bot-mode-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.bot-mode-icon-solo {
+  background: rgba(0,212,255,0.12);
+  color: var(--accent-cyan);
+}
+
+.bot-mode-icon-ai {
+  background: rgba(139,92,246,0.12);
+  color: var(--accent-purple);
+}
+
+.bot-mode-icon-hybrid {
+  background: rgba(16,185,129,0.12);
+  color: var(--accent-green);
+}
+
+.bot-mode-card.active .bot-mode-icon-solo {
+  background: rgba(0,212,255,0.2);
+}
+
+.bot-mode-card.active .bot-mode-icon-ai {
+  background: rgba(139,92,246,0.2);
+}
+
+.bot-mode-card.active .bot-mode-icon-hybrid {
+  background: rgba(16,185,129,0.2);
+}
+
+.bot-mode-card h3 {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.bot-mode-card p {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.bot-mode-card.active h3 {
+  color: var(--accent-cyan);
+}
+
+/* Bot Active Mode Bar */
+.bot-active-mode {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+
+.bot-active-mode-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Bot Config Grid */
+.bot-config-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+/* Bot Indicators Grid */
+.bot-indicators-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.bot-indicator-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  transition: all var(--transition-fast);
+}
+
+.bot-indicator-item.active {
+  color: var(--accent-green);
+  border-color: rgba(16,185,129,0.2);
+}
+
+.bot-indicator-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.bot-indicator-item.active .bot-indicator-dot {
+  background: var(--accent-green);
+  box-shadow: 0 0 6px rgba(16,185,129,0.5);
+}
+
+/* Bot Signal Items */
+.bot-signal-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--table-border);
+  font-size: 12px;
+}
+
+.bot-signal-item:last-child {
+  border-bottom: none;
+}
+
+.bot-signal-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bot-signal-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* Light theme adjustments for Bot */
+[data-theme="light"] .bot-install-card {
+  background: #ffffff;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+
+[data-theme="light"] .bot-mode-card {
+  background: #ffffff;
+}
+
+[data-theme="light"] .bot-mode-card.active {
+  background: linear-gradient(135deg, rgba(0,180,216,0.06), rgba(139,92,246,0.06));
+}
+
+[data-theme="light"] .bot-install-info-item {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .bot-install-capabilities {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .bot-indicator-item {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .bot-step {
+  background: #f8fafc;
+}
+
+[data-theme="light"] .bot-step.active {
+  background: rgba(0,180,216,0.06);
+}
+
+/* Bot page responsive */
+@media (max-width: 1200px) {
+  .bot-mode-selector { grid-template-columns: 1fr; }
+  .bot-config-grid { grid-template-columns: 1fr; }
+  .bot-install-info-grid { grid-template-columns: repeat(2, 1fr); }
+  .bot-indicators-grid { grid-template-columns: repeat(2, 1fr); }
+  .bot-install-capabilities ul { grid-template-columns: 1fr; }
+}

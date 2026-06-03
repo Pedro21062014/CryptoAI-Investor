@@ -196,19 +196,32 @@ async function loadBalance(exchange) {
       addLog('info', `Saldo carregado de ${exchange}: $${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
       saveConfig();
     } else if (result.success && (!result.balance || result.balance.length === 0)) {
-      const balanceEl = document.getElementById('total-balance');
-      if (balanceEl) balanceEl.textContent = '$0.00';
+      // Only set $0.00 if there's no cached balance
+      if (state.totalBalance === 0) {
+        const balanceEl = document.getElementById('total-balance');
+        if (balanceEl) balanceEl.textContent = '$0.00';
+      }
       addLog('info', 'Nenhum saldo encontrado na conta');
     } else if (!result.success) {
-      const balanceEl = document.getElementById('total-balance');
-      if (balanceEl) balanceEl.textContent = '$0.00';
-      addLog('error', `Erro ao carregar saldo de ${exchange}: ${result.error || 'Erro desconhecido'}`);
+      // Preserve cached balance when API fails - only log the error
+      if (state.totalBalance > 0) {
+        addLog('warning', `Erro ao carregar saldo de ${exchange}: ${result.error || 'Erro desconhecido'} - usando saldo em cache`);
+      } else {
+        const balanceEl = document.getElementById('total-balance');
+        if (balanceEl) balanceEl.textContent = '$0.00';
+        addLog('error', `Erro ao carregar saldo de ${exchange}: ${result.error || 'Erro desconhecido'}`);
+      }
       showToast(`Erro saldo ${exchange}: ${result.error || 'Erro desconhecido'}`, 'error');
     }
   } catch (err) {
-    const balanceEl = document.getElementById('total-balance');
-    if (balanceEl) balanceEl.textContent = '$0.00';
-    addLog('error', `Erro ao carregar saldo: ${err.message}`);
+    // Preserve cached balance when exception occurs
+    if (state.totalBalance > 0) {
+      addLog('warning', `Erro ao carregar saldo: ${err.message} - usando saldo em cache`);
+    } else {
+      const balanceEl = document.getElementById('total-balance');
+      if (balanceEl) balanceEl.textContent = '$0.00';
+      addLog('error', `Erro ao carregar saldo: ${err.message}`);
+    }
   }
 }
 
