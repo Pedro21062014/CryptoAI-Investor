@@ -744,7 +744,16 @@ function displayAnalysis(analysis, raw) {
           <div class="analysis-detail-label">Timeframe</div>
           <div class="analysis-detail-value">${(analysis.timeframe || 'medium').toUpperCase()}</div>
         </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Notícias</div>
+          <div class="analysis-detail-value">${newsSentiment.toUpperCase()} ${analysis.news_score !== undefined ? '(' + analysis.news_score + ')' : ''}</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Executar?</div>
+          <div class="analysis-detail-value" style="color:${execution.shouldExecute ? 'var(--accent-green)' : 'var(--accent-orange)'}">${execution.shouldExecute ? 'SIM' : 'NÃO'}</div>
+        </div>
       </div>
+      ${execution.reason ? `<div class="analysis-reasoning" style="margin-bottom:10px;"><strong>Gate de execução:</strong> ${execution.reason}</div>` : ''}
       <div class="analysis-reasoning">
         <strong>Raciocínio:</strong> ${analysis.reasoning || 'Sem detalhes disponíveis'}
       </div>
@@ -1100,45 +1109,98 @@ async function executeAITrade(analysis) {
 
   const side = analysis.recommendation === 'BUY' ? 'BUY' : 'SELL';
   const symbol = analysis.symbol || 'BTCUSDT';
+  const confidence = toFiniteNumber(analysis.confidence, 0);
+  const minConfidence = parseFloat(document.getElementById('bot-min-confidence')?.value || 72);
+  const executionGate = analysis.execution;
 
-  // Calculate safe quantity based on coin type
-  let quantity = 0.001;
-  if (symbol.includes('DOGE') || symbol.includes('SHIB') || symbol.includes('PEPE') || symbol.includes('BONK') || symbol.includes('FLOKI')) {
-    quantity = 5000;
-  } else if (symbol.includes('XRP') || symbol.includes('ADA') || symbol.includes('DOT') || symbol.includes('MATIC') || symbol.includes('NEAR') || symbol.includes('APT') || symbol.includes('SEI')) {
-    quantity = 50;
-  } else if (symbol.includes('SOL') || symbol.includes('AVAX') || symbol.includes('LINK') || symbol.includes('ATOM') || symbol.includes('UNI') || symbol.includes('ARB') || symbol.includes('OP') || symbol.includes('SUI') || symbol.includes('TIA') || symbol.includes('FET') || symbol.includes('RUNE') || symbol.includes('APE') || symbol.includes('JUP') || symbol.includes('WIF')) {
-    quantity = 5;
-  } else if (symbol.includes('ETH') || symbol.includes('BNB')) {
-    quantity = 0.01;
+  if (executionGate && !executionGate.shouldExecute) {
+    addLog('warning', `[AUTO-TRADE] Bloqueado: ${executionGate.reason}`);
+    showToast(`Auto-trade bloqueado: ${executionGate.reason}`, 'warning');
+    return;
+  }
+  if (confidence < minConfidence) {
+    addLog('warning', `[AUTO-TRADE] Bloqueado: confiança ${confidence}% < ${minConfidence}%`);
+    return;
+  }
+  if (['HIGH', 'EXTREME'].includes(analysis.risk_level) && state.riskConfig.maxRiskLevel !== 'HIGH' && state.riskConfig.maxRiskLevel !== 'EXTREME') {
+    addLog('warning', `[AUTO-TRADE] Bloqueado por risco ${analysis.risk_level}`);
+    return;
+  }
+
+  const price = toFiniteNumber(analysis.entry_price || analysis.currentPrice, 0);
+  const orderPercent = Math.min(10, Math.max(0.1, parseFloat(document.getElementById('bot-order-percent')?.value || 2)));
+  const totalBalance = toFiniteNumber(state.totalBalance, 0);
+  const notional = totalBalance > 0 ? totalBalance * (orderPercent / 100) : 10;
+
+  let quantity = 0;
+  if (price > 0) {
+    quantity = notional / price;
+  } else {
+    // fallback conservador se a analise nao trouxe preço
+    quantity = 0.001;
+  }
+
+  // Ajuste simples de precisão para evitar ordens absurdas em memecoins ou BTC/ETH.
+  if (symbol.includes('SHIB') || symbol.includes('PEPE') || symbol.includes('BONK') || symbol.includes('FLOKI')) quantity = Math.floor(quantity);
+  else if (symbol.includes('BTC')) quantity = Number(quantity.toFixed(6));
+  else if (symbol.includes('ETH') || symbol.includes('BNB')) quantity = Number(quantity.toFixed(5));
+  else quantity = Number(quantity.toFixed(3));
+
+  if (!quantity || quantity <= 0) {
+    addLog('warning', '[AUTO-TRADE] Quantidade calculada invalida; ordem cancelada');
+    return;
   }
 
   const order = {
     symbol: symbol,
     side: side,
     type: 'Market',
-    quantity: quantity
+    quantity: quantity,
+    price: price || undefined,
+    stopLoss: analysis.stop_loss || undefined,
+    takeProfit: analysis.target_price || undefined
   };
 
-  addLog('info', `[AUTO-TRADE] Executando ${side} ${quantity} ${symbol} baseado na IA`);
+  try {
+    const validation = await window.electronAPI.validateTrade(
+      state.riskConfig,
+      order,
+      { totalValue: totalBalance || 1000, todayTrades: state.trades.length }
+    );
+    if (!validation.valid) {
+      addLog('error', `[AUTO-TRADE] Bloqueado pelo risco: ${validation.errors.join(', ')}`);
+      showToast(`Trade bloqueado: ${validation.errors.join(', ')}`, 'error');
+      return;
+    }
+    if (validation.adjustedTrade?.quantity && validation.adjustedTrade.quantity !== quantity) {
+      order.quantity = Number(validation.adjustedTrade.quantity.toFixed(6));
+      addLog('warning', `[AUTO-TRADE] Quantidade ajustada pelo risco para ${order.quantity}`);
+    }
+  } catch (err) {
+    addLog('warning', `[AUTO-TRADE] Validação de risco falhou: ${err.message}`);
+  }
+
+  addLog('info', `[AUTO-TRADE] Executando ${side} ${order.quantity} ${symbol} | ${orderPercent}% do saldo | conf ${confidence}%`);
 
   try {
     const result = await window.electronAPI.placeOrder(state.exchangeConfigs[exchange], order);
     if (result.success) {
-      showToast(`Auto-trade executado: ${side} ${quantity} ${symbol}`, 'success');
-      addLog('success', `[AUTO-TRADE] ${side} ${quantity} ${symbol} executado`);
+      showToast(`Auto-trade executado: ${side} ${order.quantity} ${symbol}`, 'success');
+      addLog('success', `[AUTO-TRADE] ${side} ${order.quantity} ${symbol} executado`);
       state.trades.push({
         time: new Date(),
         symbol: symbol,
         side: side,
-        price: 'Market',
-        quantity: quantity,
+        price: price || 'Market',
+        quantity: order.quantity,
         status: 'filled'
       });
       updateTradesTable();
       saveConfig();
+      setTimeout(() => loadBalance(exchange), 3000);
     } else {
-      addLog('error', `[AUTO-TRADE] Falha: ${result.error}`);
+      addLog('error', `[AUTO-TRADE] Falha: ${result.error || JSON.stringify(result.data || {})}`);
+      showToast(`Falha no auto-trade: ${result.error || 'erro da corretora'}`, 'error');
     }
   } catch (err) {
     addLog('error', `[AUTO-TRADE] Exceção: ${err.message}`);
@@ -1826,8 +1888,8 @@ function updateCryptoBotUI() {
   }
 }
 
-async function runCryptoBotCycle() {
-  if (!botState.running) return;
+async function runCryptoBotCycle(force = false) {
+  if (!botState.running && !force) return;
 
   let symbol = document.getElementById('bot-symbol')?.value || 'BTCUSDT';
   if (symbol === 'custom') {
@@ -1835,26 +1897,49 @@ async function runCryptoBotCycle() {
   }
   const interval = document.getElementById('bot-interval')?.value || '60';
   const autoTrade = document.getElementById('bot-auto-trade')?.checked || false;
+  const minConfidence = parseFloat(document.getElementById('bot-min-confidence')?.value || 72);
+  const requireNewsAlignment = document.getElementById('bot-require-news-alignment')?.checked !== false;
+  const analyzeNewsContinuously = document.getElementById('bot-news-continuous')?.checked !== false;
 
-  addLog('info', `[CryptoBot] Ciclo de analise iniciado - ${symbol} - Modo: ${botState.mode}`);
+  addLog('info', `[CryptoBot] Ciclo continuo iniciado - ${symbol} - Modo: ${botState.mode}`);
 
   try {
     let botResult = null;
     let aiResult = null;
+    let newsData = [];
+    let sentiment = null;
 
-    // Bot analysis (technical indicators)
+    if (analyzeNewsContinuously) {
+      try {
+        newsData = await window.electronAPI.getCryptoNews();
+        sentiment = await window.electronAPI.getMarketSentiment();
+        updateSentimentUI(sentiment);
+        addLog('info', `[CryptoBot] Noticias analisadas: ${newsData.filter(n => !n.error).length} | sentimento: ${sentiment?.overall || 'neutral'} (${Math.round(sentiment?.score || 50)})`);
+      } catch (e) {
+        addLog('warning', `[CryptoBot] Falha ao analisar noticias: ${e.message}`);
+      }
+    }
+
+    const context = {
+      news: newsData,
+      sentiment,
+      minConfidence,
+      requireNewsAlignment
+    };
+
+    // Bot analysis (technical indicators + news gate)
     if (botState.mode === 'bot' || botState.mode === 'hybrid') {
       botResult = await window.electronAPI.botAnalyze(
         state.exchangeConfigs[state.activeExchange],
         symbol,
-        interval
+        interval,
+        context
       );
     }
 
-    // AI analysis
+    // AI analysis with news/sentiment context
     if (botState.mode === 'ai' || botState.mode === 'hybrid') {
       const aiConfig = { ...state.aiConfigs[state.activeAI], ...state.riskConfig };
-      // Get market data for AI
       let marketData = {};
       const candleResult = await window.electronAPI.getCandlesticks(
         state.exchangeConfigs[state.activeExchange],
@@ -1863,14 +1948,21 @@ async function runCryptoBotCycle() {
       );
       if (candleResult.success) marketData[symbol] = candleResult.data;
 
-      aiResult = await window.electronAPI.aiGetAnalysis(aiConfig, marketData, {});
+      aiResult = await window.electronAPI.aiGetAnalysis(aiConfig, marketData, { news: newsData, sentiment });
+      if (aiResult?.success && aiResult.analysis) {
+        aiResult.analysis.execution = {
+          shouldExecute: ['BUY', 'SELL'].includes(aiResult.analysis.recommendation) && (aiResult.analysis.confidence || 0) >= minConfidence,
+          minConfidence,
+          newsAligned: true,
+          reason: (aiResult.analysis.confidence || 0) >= minConfidence ? 'IA acima da confiança mínima' : 'IA abaixo da confiança mínima'
+        };
+      }
     }
 
     // Combine results based on mode
     let finalAnalysis = null;
 
     if (botState.mode === 'hybrid' && botResult?.success && aiResult?.success) {
-      // Hybrid: average confidence, prefer agreement
       const botRec = botResult.analysis.recommendation;
       const aiRec = aiResult.analysis.recommendation;
       const botConf = botResult.analysis.confidence;
@@ -1884,40 +1976,52 @@ async function runCryptoBotCycle() {
         confidence = Math.min(95, Math.round((botConf + aiConf) / 2 + 10));
       } else if (botRec === 'HOLD' || aiRec === 'HOLD') {
         recommendation = botRec === 'HOLD' ? aiRec : botRec;
-        confidence = Math.round((botConf + aiConf) / 2 - 5);
+        confidence = Math.round((botConf + aiConf) / 2 - 8);
       } else {
-        // Bot says BUY and AI says SELL or vice versa - conflicting
         recommendation = 'HOLD';
-        confidence = 30;
+        confidence = 25;
       }
+
+      const execution = {
+        shouldExecute: ['BUY', 'SELL'].includes(recommendation)
+          && confidence >= minConfidence
+          && botResult.analysis.execution?.shouldExecute !== false
+          && aiResult.analysis.execution?.shouldExecute !== false,
+        minConfidence,
+        newsAligned: botResult.analysis.execution?.newsAligned !== false,
+        reason: ''
+      };
+      execution.reason = execution.shouldExecute
+        ? 'Bot tecnico + IA + noticias aprovaram'
+        : `Bloqueado: bot=${botResult.analysis.execution?.reason || botRec}, ia=${aiResult.analysis.execution?.reason || aiRec}`;
 
       finalAnalysis = {
         ...botResult.analysis,
         recommendation,
         confidence,
-        source: 'CryptoBot + IA',
+        source: 'CryptoBot + IA + Noticias',
         reasoning: `[BOT]: ${botResult.analysis.reasoning}\n[IA]: ${aiResult.analysis.reasoning}`,
-        factors: [...(botResult.analysis.factors || []), ...(aiResult.analysis.factors || [])]
+        factors: [...(botResult.analysis.factors || []), ...(aiResult.analysis.factors || [])],
+        execution
       };
     } else if (botState.mode === 'bot' && botResult?.success) {
-      finalAnalysis = { ...botResult.analysis, source: 'CryptoBot Beta' };
+      finalAnalysis = { ...botResult.analysis, source: 'CryptoBot Noticias' };
     } else if (botState.mode === 'ai' && aiResult?.success) {
-      finalAnalysis = { ...aiResult.analysis, source: 'IA Only' };
+      finalAnalysis = { ...aiResult.analysis, source: 'IA + Noticias' };
     }
 
     if (finalAnalysis) {
       displayBotAnalysis(finalAnalysis);
       botState.analysisCount++;
-
-      // Add signal
       addBotSignal(finalAnalysis);
 
-      // Auto trade
-      if (autoTrade && (finalAnalysis.recommendation === 'BUY' || finalAnalysis.recommendation === 'SELL')) {
-        executeAITrade(finalAnalysis);
+      if (autoTrade && finalAnalysis.execution?.shouldExecute) {
+        await executeAITrade(finalAnalysis);
+      } else if (autoTrade) {
+        addLog('warning', `[CryptoBot] Auto-trade nao executado: ${finalAnalysis.execution?.reason || 'sinal insuficiente'}`);
       }
 
-      addLog('success', `[CryptoBot] Analise: ${finalAnalysis.recommendation} (${finalAnalysis.confidence}%) - ${symbol}`);
+      addLog(finalAnalysis.execution?.shouldExecute ? 'success' : 'info', `[CryptoBot] Analise: ${finalAnalysis.recommendation} (${finalAnalysis.confidence}%) - ${symbol} | executar=${finalAnalysis.execution?.shouldExecute ? 'SIM' : 'NAO'} | ${finalAnalysis.execution?.reason || ''}`);
     } else {
       const error = botResult?.error || aiResult?.error || 'Erro desconhecido';
       addLog('error', `[CryptoBot] Erro na analise: ${error}`);
@@ -1933,7 +2037,7 @@ async function runBotAnalysis() {
     showToast('Conecte uma corretora primeiro', 'warning');
     return;
   }
-  await runCryptoBotCycle();
+  await runCryptoBotCycle(true);
 }
 
 function displayBotAnalysis(analysis) {
@@ -1947,6 +2051,8 @@ function displayBotAnalysis(analysis) {
   const symbol = analysis.symbol || 'BTCUSDT';
   const trend = analysis.trend || '';
   const source = analysis.source || 'CryptoBot';
+  const execution = analysis.execution || {};
+  const newsSentiment = analysis.news_sentiment || analysis.market_intel?.overall || 'neutral';
 
   if (badge) {
     badge.textContent = rec;

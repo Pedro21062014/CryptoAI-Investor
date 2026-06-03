@@ -1067,8 +1067,23 @@
                 <label>Ciclo de Analise (minutos)</label>
                 <input type="number" id="bot-cycle-interval" value="5" min="1" max="60">
               </div>
+              <div class="form-group">
+                <label>Confiança mínima para executar (%)</label>
+                <input type="number" id="bot-min-confidence" value="72" min="50" max="95" step="1">
+              </div>
+              <div class="form-group">
+                <label>Tamanho da ordem (% do saldo)</label>
+                <input type="number" id="bot-order-percent" value="2" min="0.1" max="10" step="0.1">
+              </div>
+              <div class="form-group checkbox-group">
+                <label><input type="checkbox" id="bot-news-continuous" checked> Analisar notícias e sentimento em todos os ciclos</label>
+              </div>
+              <div class="form-group checkbox-group">
+                <label><input type="checkbox" id="bot-require-news-alignment" checked> Só operar quando notícias confirmarem o sinal</label>
+              </div>
               <div class="form-group checkbox-group">
                 <label><input type="checkbox" id="bot-auto-trade"> Auto-Trade (executar trades automaticamente)</label>
+                <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">Ordens só serão executadas se passarem confiança mínima, notícias, risco e saldo disponível.</small>
               </div>
             </div>
           </div>

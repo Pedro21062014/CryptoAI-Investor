@@ -149,6 +149,139 @@ const indicators = {
 };
 
 // ===== Signal Generation Engine =====
+
+function normalizeSymbolFromText(text = '') {
+  const upper = String(text).toUpperCase();
+  const aliases = {
+    BITCOIN: 'BTCUSDT', BTC: 'BTCUSDT', ETHEREUM: 'ETHUSDT', ETH: 'ETHUSDT',
+    SOLANA: 'SOLUSDT', SOL: 'SOLUSDT', BINANCE: 'BNBUSDT', BNB: 'BNBUSDT',
+    XRP: 'XRPUSDT', CARDANO: 'ADAUSDT', ADA: 'ADAUSDT', DOGE: 'DOGEUSDT',
+    DOGECOIN: 'DOGEUSDT', AVAX: 'AVAXUSDT', AVALANCHE: 'AVAXUSDT', LINK: 'LINKUSDT',
+    CHAINLINK: 'LINKUSDT', LITECOIN: 'LTCUSDT', LTC: 'LTCUSDT', POLKADOT: 'DOTUSDT',
+    DOT: 'DOTUSDT', SHIB: 'SHIBUSDT', PEPE: 'PEPEUSDT', BONK: 'BONKUSDT',
+    FLOKI: 'FLOKIUSDT', ARBITRUM: 'ARBUSDT', ARB: 'ARBUSDT', OPTIMISM: 'OPUSDT',
+    OP: 'OPUSDT', SUI: 'SUIUSDT', APT: 'APTUSDT', APTOS: 'APTUSDT', FET: 'FETUSDT',
+    RUNE: 'RUNEUSDT', NEAR: 'NEARUSDT', ATOM: 'ATOMUSDT', UNI: 'UNIUSDT'
+  };
+  return Object.keys(aliases).filter(key => new RegExp(`\\b${key}\\b`, 'i').test(upper)).map(key => aliases[key]);
+}
+
+function analyzeNewsImpact(news = [], sentiment = {}) {
+  const validNews = Array.isArray(news) ? news.filter(n => !n.error) : [];
+  const bullishTerms = ['surge', 'rally', 'bullish', 'breakout', 'approval', 'etf', 'partnership', 'adoption', 'upgrade', 'launch', 'integrates', 'record inflows', 'accumulation', 'growth', 'positive'];
+  const bearishTerms = ['hack', 'exploit', 'lawsuit', 'ban', 'sec sues', 'crash', 'dump', 'bearish', 'liquidation', 'outflows', 'halt', 'insolvency', 'bankruptcy', 'regulation', 'warning', 'delist'];
+  const criticalTerms = ['hack', 'exploit', 'bankruptcy', 'insolvency', 'delist', 'trading halted', 'withdrawals suspended'];
+
+  let score = 0;
+  const factors = [];
+  const symbols = new Map();
+  let criticalRisk = false;
+
+  validNews.slice(0, 40).forEach(item => {
+    const text = `${item.title || ''} ${item.description || ''}`;
+    const lower = text.toLowerCase();
+    let localScore = 0;
+    bullishTerms.forEach(term => { if (lower.includes(term)) localScore += 1; });
+    bearishTerms.forEach(term => { if (lower.includes(term)) localScore -= 1; });
+    criticalTerms.forEach(term => { if (lower.includes(term)) criticalRisk = true; });
+    if (item.sentiment === 'bullish') localScore += 1;
+    if (item.sentiment === 'bearish') localScore -= 1;
+    score += localScore;
+
+    normalizeSymbolFromText(text).forEach(symbol => {
+      const current = symbols.get(symbol) || { score: 0, mentions: 0 };
+      current.score += localScore;
+      current.mentions += 1;
+      symbols.set(symbol, current);
+    });
+
+    if (localScore >= 2) factors.push(`Noticia positiva: ${String(item.title || '').slice(0, 90)}`);
+    if (localScore <= -2) factors.push(`Noticia negativa: ${String(item.title || '').slice(0, 90)}`);
+  });
+
+  const sentimentScore = Number(sentiment?.score || 50);
+  if (sentiment?.overall === 'bullish') score += 2;
+  if (sentiment?.overall === 'bearish') score -= 2;
+  if (sentimentScore > 70) score += 1;
+  if (sentimentScore < 30) score -= 1;
+
+  const impactedSymbols = Array.from(symbols.entries())
+    .map(([symbol, data]) => ({ symbol, ...data }))
+    .sort((a, b) => Math.abs(b.score) + b.mentions - (Math.abs(a.score) + a.mentions));
+
+  const overall = score >= 3 ? 'bullish' : score <= -3 ? 'bearish' : 'neutral';
+  return {
+    overall,
+    score,
+    criticalRisk,
+    shouldPauseTrading: criticalRisk || sentimentScore < 18,
+    impactedSymbols,
+    factors: factors.slice(0, 8),
+    newsCount: validNews.length,
+    sentimentScore
+  };
+}
+
+function enhanceAnalysisWithNews(analysis, news = [], sentiment = {}, options = {}) {
+  const newsImpact = analyzeNewsImpact(news, sentiment);
+  const enhanced = { ...analysis };
+  const originalConfidence = Number(enhanced.confidence || 50);
+  let confidence = originalConfidence;
+  const currentRecommendation = enhanced.recommendation || 'HOLD';
+
+  if (newsImpact.shouldPauseTrading) {
+    enhanced.recommendation = 'HOLD';
+    confidence = Math.max(25, Math.min(confidence, 55));
+    enhanced.risk_level = 'HIGH';
+  } else if (newsImpact.overall === 'bullish') {
+    if (currentRecommendation === 'BUY') confidence += 8;
+    if (currentRecommendation === 'SELL') confidence -= 12;
+  } else if (newsImpact.overall === 'bearish') {
+    if (currentRecommendation === 'SELL') confidence += 8;
+    if (currentRecommendation === 'BUY') confidence -= 12;
+  }
+
+  const symbolImpact = newsImpact.impactedSymbols.find(s => s.symbol === enhanced.symbol);
+  if (symbolImpact) {
+    if (symbolImpact.score > 0 && enhanced.recommendation === 'BUY') confidence += Math.min(8, symbolImpact.score * 2);
+    if (symbolImpact.score < 0 && enhanced.recommendation === 'SELL') confidence += Math.min(8, Math.abs(symbolImpact.score) * 2);
+    if (symbolImpact.score < 0 && enhanced.recommendation === 'BUY') confidence -= Math.min(12, Math.abs(symbolImpact.score) * 3);
+  }
+
+  confidence = Math.max(0, Math.min(95, Math.round(confidence)));
+  enhanced.confidence = confidence;
+  enhanced.news_sentiment = newsImpact.overall;
+  enhanced.news_score = newsImpact.score;
+  enhanced.news_factors = newsImpact.factors;
+  enhanced.market_intel = newsImpact;
+  enhanced.factors = [...(enhanced.factors || []), `News: ${newsImpact.overall} (${newsImpact.score})`, ...newsImpact.factors.slice(0, 3)];
+  enhanced.reasoning = `${enhanced.reasoning || ''}${newsImpact.factors.length ? ' | Noticias: ' + newsImpact.factors.join(' | ') : ''}`;
+
+  const minConfidence = Number(options.minConfidence || 70);
+  const requireNewsAlignment = options.requireNewsAlignment !== false;
+  const aligned = enhanced.recommendation === 'HOLD' || newsImpact.overall === 'neutral'
+    || (enhanced.recommendation === 'BUY' && newsImpact.overall === 'bullish')
+    || (enhanced.recommendation === 'SELL' && newsImpact.overall === 'bearish');
+
+  enhanced.execution = {
+    shouldExecute: ['BUY', 'SELL'].includes(enhanced.recommendation)
+      && confidence >= minConfidence
+      && !newsImpact.shouldPauseTrading
+      && (!requireNewsAlignment || aligned),
+    minConfidence,
+    newsAligned: aligned,
+    reason: ''
+  };
+
+  if (!['BUY', 'SELL'].includes(enhanced.recommendation)) enhanced.execution.reason = 'Sem recomendacao operacional';
+  else if (confidence < minConfidence) enhanced.execution.reason = `Confianca ${confidence}% abaixo do minimo ${minConfidence}%`;
+  else if (newsImpact.shouldPauseTrading) enhanced.execution.reason = 'Noticias/medo extremo pausaram operacoes';
+  else if (requireNewsAlignment && !aligned) enhanced.execution.reason = 'Noticias nao confirmam o sinal tecnico';
+  else enhanced.execution.reason = 'Sinal tecnico + noticias aprovados';
+
+  return enhanced;
+}
+
 function generateSignals(marketData) {
   const signals = [];
   const closes = marketData.closes || [];
@@ -339,7 +472,7 @@ async function fetchMarketDataForBot(exchangeConfig, symbol, interval = '60') {
       const base = exchangeConfig.testnet ? 'https://testnet.binance.vision' : 'https://api.binance.com';
       url = `${base}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=100`;
     } else if (exchangeConfig.exchange === 'bybit') {
-      const base = exchangeConfig.testnet ? 'https://api-testnet.bybit.com' : 'https://api.bybit.com';
+      const base = exchangeConfig.demo ? 'https://api-demo.bybit.com' : exchangeConfig.testnet ? 'https://api-testnet.bybit.com' : 'https://api.bybit.com';
       url = `${base}/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}&limit=100`;
     } else if (exchangeConfig.exchange === 'okx') {
       headers = exchangeConfig.testnet ? { 'x-simulated-trading': '1' } : {};
@@ -412,7 +545,7 @@ module.exports = {
     };
   },
 
-  async analyze(exchangeConfig, symbol, interval) {
+  async analyze(exchangeConfig, symbol, interval, context = {}) {
     try {
       const marketData = await fetchMarketDataForBot(exchangeConfig, symbol, interval);
       if (marketData.error) {
@@ -439,31 +572,47 @@ module.exports = {
         stopLoss = currentPrice + atrVal * 1.5;
       }
 
+      const baseAnalysis = {
+        recommendation: result.overall,
+        confidence: result.confidence,
+        risk_level: result.riskLevel,
+        entry_price: Math.round(entryPrice * 100) / 100,
+        target_price: targetPrice ? Math.round(targetPrice * 100) / 100 : null,
+        stop_loss: stopLoss ? Math.round(stopLoss * 100) / 100 : null,
+        reasoning: result.signals.map(s => s.reason).join('. '),
+        factors: result.signals.map(s => `${s.indicator}: ${s.type}`),
+        timeframe: 'medium',
+        sentiment: result.trend === 'ALTA' ? 'bullish' : result.trend === 'BAIXA' ? 'bearish' : 'neutral',
+        trend: result.trend,
+        symbol: symbol,
+        source: 'CryptoBot Beta'
+      };
+
+      const analysis = enhanceAnalysisWithNews(
+        baseAnalysis,
+        context.news || [],
+        context.sentiment || {},
+        {
+          minConfidence: context.minConfidence,
+          requireNewsAlignment: context.requireNewsAlignment
+        }
+      );
+
       return {
         success: true,
-        analysis: {
-          recommendation: result.overall,
-          confidence: result.confidence,
-          risk_level: result.riskLevel,
-          entry_price: Math.round(entryPrice * 100) / 100,
-          target_price: targetPrice ? Math.round(targetPrice * 100) / 100 : null,
-          stop_loss: stopLoss ? Math.round(stopLoss * 100) / 100 : null,
-          reasoning: result.signals.map(s => s.reason).join('. '),
-          factors: result.signals.map(s => `${s.indicator}: ${s.type}`),
-          timeframe: 'medium',
-          sentiment: result.trend === 'ALTA' ? 'bullish' : result.trend === 'BAIXA' ? 'bearish' : 'neutral',
-          trend: result.trend,
-          symbol: symbol,
-          source: 'CryptoBot Beta'
-        },
+        analysis,
         indicators: result.indicators,
         signals: result.signals,
-        raw: JSON.stringify(result, null, 2)
+        marketIntel: analysis.market_intel,
+        raw: JSON.stringify({ ...result, marketIntel: analysis.market_intel, execution: analysis.execution }, null, 2)
       };
     } catch (err) {
       return { success: false, error: err.message };
     }
   },
+
+  analyzeNewsImpact,
+  enhanceAnalysisWithNews,
 
   async testConnection() {
     return {
