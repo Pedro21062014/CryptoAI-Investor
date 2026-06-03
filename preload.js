@@ -32,6 +32,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   calculateRisk: (config, portfolio, analysis) => ipcRenderer.invoke('risk:calculate', config, portfolio, analysis),
   validateTrade: (config, trade, portfolio) => ipcRenderer.invoke('risk:validate-trade', config, trade, portfolio),
 
+  // Bot
+  botGetInfo: () => ipcRenderer.invoke('bot:get-info'),
+  botAnalyze: (exchangeConfig, symbol, interval) => ipcRenderer.invoke('bot:analyze', exchangeConfig, symbol, interval),
+  botTestConnection: () => ipcRenderer.invoke('bot:test-connection'),
+
   // Events
   onTradeExecuted: (callback) => ipcRenderer.on('trade-executed', (e, data) => callback(data)),
   onAnalysisComplete: (callback) => ipcRenderer.on('analysis-complete', (e, data) => callback(data)),

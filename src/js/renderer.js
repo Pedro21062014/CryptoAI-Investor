@@ -1322,3 +1322,453 @@ function updateAIMetrics(tokenCount) {
     badgeEl.className = state.botRunning ? 'badge success' : 'badge info';
   }
 }
+
+// ===== CryptoBot Beta =====
+const botState = {
+  installed: false,
+  mode: 'bot', // 'bot', 'ai', 'hybrid'
+  running: false,
+  interval: null,
+  signals: [],
+  analysisCount: 0
+};
+
+// Load bot install state from cache
+try {
+  const botSaved = localStorage.getItem('cryptoai-bot-installed');
+  if (botSaved === 'true') {
+    botState.installed = true;
+  }
+  const botModeSaved = localStorage.getItem('cryptoai-bot-mode');
+  if (botModeSaved) {
+    botState.mode = botModeSaved;
+  }
+} catch (e) {}
+
+// Initialize bot page on load
+document.addEventListener('DOMContentLoaded', () => {
+  updateBotPageState();
+});
+
+function updateBotPageState() {
+  const notInstalled = document.getElementById('bot-not-installed');
+  const mainContent = document.getElementById('bot-main-content');
+  const installBadge = document.getElementById('bot-install-badge');
+
+  if (botState.installed) {
+    if (notInstalled) notInstalled.style.display = 'none';
+    if (mainContent) mainContent.style.display = 'block';
+    if (installBadge) {
+      installBadge.textContent = 'Instalado';
+      installBadge.className = 'badge success';
+    }
+    // Restore mode selection
+    setBotMode(botState.mode, true);
+  } else {
+    if (notInstalled) notInstalled.style.display = 'flex';
+    if (mainContent) mainContent.style.display = 'none';
+    if (installBadge) {
+      installBadge.textContent = 'Nao Instalado';
+      installBadge.className = 'badge';
+    }
+  }
+}
+
+async function installBot() {
+  const notInstalled = document.getElementById('bot-not-installed');
+  const installScreen = document.getElementById('bot-install-screen');
+
+  // Show installation screen
+  if (notInstalled) notInstalled.style.display = 'none';
+  if (installScreen) installScreen.style.display = 'flex';
+
+  addLog('info', 'Iniciando instalacao do CryptoBot Beta (687 MB)...');
+  showToast('Instalando CryptoBot Beta...', 'info');
+
+  const steps = [
+    { id: 1, duration: 3000, status: 'Baixando motor de analise tecnica...' },
+    { id: 2, duration: 2500, status: 'Carregando indicadores (RSI, MACD, BB, Stoch)...' },
+    { id: 3, duration: 2000, status: 'Inicializando modelos de sinal...' },
+    { id: 4, duration: 1500, status: 'Configurando motor de risco...' },
+    { id: 5, duration: 1000, status: 'Finalizando instalacao...' }
+  ];
+
+  const totalDuration = steps.reduce((sum, s) => sum + s.duration, 0);
+  let elapsed = 0;
+
+  for (const step of steps) {
+    // Mark step active
+    const stepEl = document.getElementById(`bot-step-${step.id}`);
+    if (stepEl) {
+      stepEl.className = 'bot-step active';
+    }
+    document.getElementById('bot-progress-status').textContent = step.status;
+
+    // Animate progress
+    const startPercent = Math.round((elapsed / totalDuration) * 100);
+    const endPercent = Math.round(((elapsed + step.duration) / totalDuration) * 100);
+
+    await new Promise(resolve => {
+      const increment = (endPercent - startPercent) / 20;
+      let current = startPercent;
+      const interval = setInterval(() => {
+        current += increment;
+        if (current >= endPercent) {
+          current = endPercent;
+          clearInterval(interval);
+          resolve();
+        }
+        document.getElementById('bot-progress-fill').style.width = current + '%';
+        document.getElementById('bot-progress-percent').textContent = Math.round(current) + '%';
+      }, step.duration / 20);
+    });
+
+    // Mark step done
+    if (stepEl) {
+      stepEl.className = 'bot-step done';
+    }
+    elapsed += step.duration;
+  }
+
+  // Installation complete
+  botState.installed = true;
+  localStorage.setItem('cryptoai-bot-installed', 'true');
+
+  addLog('success', 'CryptoBot Beta instalado com sucesso!');
+  showToast('CryptoBot Beta instalado com sucesso!', 'success');
+
+  // Transition to main content
+  await new Promise(r => setTimeout(r, 1000));
+  if (installScreen) installScreen.style.display = 'none';
+  updateBotPageState();
+}
+
+function setBotMode(mode, silent) {
+  botState.mode = mode;
+  localStorage.setItem('cryptoai-bot-mode', mode);
+
+  document.querySelectorAll('.bot-mode-card').forEach(c => c.classList.remove('active'));
+  document.querySelector(`.bot-mode-card[data-mode="${mode}"]`)?.classList.add('active');
+
+  const modeNames = { bot: 'Bot', ai: 'IA', hybrid: 'Bot + IA' };
+  const statusText = document.getElementById('bot-mode-status-text');
+  if (statusText) {
+    statusText.textContent = `Modo: ${modeNames[mode] || 'Bot'} - ${botState.running ? 'Ativo' : 'Parado'}`;
+  }
+
+  if (!silent) {
+    showToast(`Modo alterado para: ${modeNames[mode]}`, 'info');
+    addLog('info', `Modo do CryptoBot alterado para: ${modeNames[mode]}`);
+  }
+}
+
+async function toggleCryptoBot() {
+  if (botState.running) {
+    stopCryptoBot();
+  } else {
+    startCryptoBot();
+  }
+}
+
+async function startCryptoBot() {
+  if (!state.activeExchange) {
+    showToast('Conecte uma corretora antes de iniciar o Bot', 'warning');
+    return;
+  }
+
+  if (botState.mode === 'ai' && !state.activeAI) {
+    showToast('Configure uma IA antes de usar o modo IA', 'warning');
+    return;
+  }
+
+  if (botState.mode === 'hybrid' && !state.activeAI) {
+    showToast('Configure uma IA para o modo hibrido', 'warning');
+    return;
+  }
+
+  botState.running = true;
+  updateCryptoBotUI();
+  showToast('CryptoBot Beta iniciado!', 'success');
+  addLog('success', `CryptoBot Beta iniciado no modo: ${botState.mode}`);
+
+  // Run first analysis immediately
+  runCryptoBotCycle();
+
+  // Set interval
+  const cycleMinutes = parseInt(document.getElementById('bot-cycle-interval')?.value || 5);
+  botState.interval = setInterval(() => {
+    runCryptoBotCycle();
+  }, cycleMinutes * 60 * 1000);
+}
+
+function stopCryptoBot() {
+  botState.running = false;
+  if (botState.interval) {
+    clearInterval(botState.interval);
+    botState.interval = null;
+  }
+  updateCryptoBotUI();
+  showToast('CryptoBot Beta parado', 'warning');
+  addLog('warning', 'CryptoBot Beta parado');
+}
+
+function updateCryptoBotUI() {
+  const btn = document.getElementById('btn-start-cryptobot');
+  const statusDot = document.getElementById('bot-mode-status-dot');
+  const statusText = document.getElementById('bot-mode-status-text');
+  const analysisBadge = document.getElementById('bot-analysis-badge');
+
+  const modeNames = { bot: 'Bot', ai: 'IA', hybrid: 'Bot + IA' };
+
+  if (botState.running) {
+    if (btn) {
+      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Parar';
+      btn.className = 'btn btn-sell';
+    }
+    if (statusDot) { statusDot.classList.remove('offline'); statusDot.classList.add('online'); }
+    if (statusText) statusText.textContent = `Modo: ${modeNames[botState.mode]} - Ativo`;
+    if (analysisBadge) { analysisBadge.textContent = 'Analisando'; analysisBadge.className = 'badge warning'; }
+
+    // Also update the sidebar bot status
+    const sidebarBotStatus = document.getElementById('bot-status');
+    if (sidebarBotStatus) {
+      sidebarBotStatus.innerHTML = '<span class="status-dot online"></span><span class="status-text">Bot Ativo</span>';
+    }
+  } else {
+    if (btn) {
+      btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Iniciar';
+      btn.className = 'btn btn-primary';
+    }
+    if (statusDot) { statusDot.classList.remove('online'); statusDot.classList.add('offline'); }
+    if (statusText) statusText.textContent = `Modo: ${modeNames[botState.mode]} - Parado`;
+    if (analysisBadge) { analysisBadge.textContent = 'Parado'; analysisBadge.className = 'badge'; }
+
+    const sidebarBotStatus = document.getElementById('bot-status');
+    if (sidebarBotStatus) {
+      sidebarBotStatus.innerHTML = '<span class="status-dot offline"></span><span class="status-text">Bot Parado</span>';
+    }
+  }
+}
+
+async function runCryptoBotCycle() {
+  if (!botState.running) return;
+
+  const symbol = document.getElementById('bot-symbol')?.value || 'BTCUSDT';
+  const interval = document.getElementById('bot-interval')?.value || '60';
+  const autoTrade = document.getElementById('bot-auto-trade')?.checked || false;
+
+  addLog('info', `[CryptoBot] Ciclo de analise iniciado - ${symbol} - Modo: ${botState.mode}`);
+
+  try {
+    let botResult = null;
+    let aiResult = null;
+
+    // Bot analysis (technical indicators)
+    if (botState.mode === 'bot' || botState.mode === 'hybrid') {
+      botResult = await window.electronAPI.botAnalyze(
+        state.exchangeConfigs[state.activeExchange],
+        symbol,
+        interval
+      );
+    }
+
+    // AI analysis
+    if (botState.mode === 'ai' || botState.mode === 'hybrid') {
+      const aiConfig = { ...state.aiConfigs[state.activeAI], ...state.riskConfig };
+      // Get market data for AI
+      let marketData = {};
+      const candleResult = await window.electronAPI.getCandlesticks(
+        state.exchangeConfigs[state.activeExchange],
+        symbol,
+        interval
+      );
+      if (candleResult.success) marketData[symbol] = candleResult.data;
+
+      aiResult = await window.electronAPI.aiGetAnalysis(aiConfig, marketData, {});
+    }
+
+    // Combine results based on mode
+    let finalAnalysis = null;
+
+    if (botState.mode === 'hybrid' && botResult?.success && aiResult?.success) {
+      // Hybrid: average confidence, prefer agreement
+      const botRec = botResult.analysis.recommendation;
+      const aiRec = aiResult.analysis.recommendation;
+      const botConf = botResult.analysis.confidence;
+      const aiConf = aiResult.analysis.confidence;
+
+      let recommendation = 'HOLD';
+      let confidence = Math.round((botConf + aiConf) / 2);
+
+      if (botRec === aiRec) {
+        recommendation = botRec;
+        confidence = Math.min(95, Math.round((botConf + aiConf) / 2 + 10));
+      } else if (botRec === 'HOLD' || aiRec === 'HOLD') {
+        recommendation = botRec === 'HOLD' ? aiRec : botRec;
+        confidence = Math.round((botConf + aiConf) / 2 - 5);
+      } else {
+        // Bot says BUY and AI says SELL or vice versa - conflicting
+        recommendation = 'HOLD';
+        confidence = 30;
+      }
+
+      finalAnalysis = {
+        ...botResult.analysis,
+        recommendation,
+        confidence,
+        source: 'CryptoBot + IA',
+        reasoning: `[BOT]: ${botResult.analysis.reasoning}\n[IA]: ${aiResult.analysis.reasoning}`,
+        factors: [...(botResult.analysis.factors || []), ...(aiResult.analysis.factors || [])]
+      };
+    } else if (botState.mode === 'bot' && botResult?.success) {
+      finalAnalysis = { ...botResult.analysis, source: 'CryptoBot Beta' };
+    } else if (botState.mode === 'ai' && aiResult?.success) {
+      finalAnalysis = { ...aiResult.analysis, source: 'IA Only' };
+    }
+
+    if (finalAnalysis) {
+      displayBotAnalysis(finalAnalysis);
+      botState.analysisCount++;
+
+      // Add signal
+      addBotSignal(finalAnalysis);
+
+      // Auto trade
+      if (autoTrade && (finalAnalysis.recommendation === 'BUY' || finalAnalysis.recommendation === 'SELL')) {
+        executeAITrade(finalAnalysis);
+      }
+
+      addLog('success', `[CryptoBot] Analise: ${finalAnalysis.recommendation} (${finalAnalysis.confidence}%) - ${symbol}`);
+    } else {
+      const error = botResult?.error || aiResult?.error || 'Erro desconhecido';
+      addLog('error', `[CryptoBot] Erro na analise: ${error}`);
+      showToast(`CryptoBot erro: ${error}`, 'error');
+    }
+  } catch (err) {
+    addLog('error', `[CryptoBot] Excecao: ${err.message}`);
+  }
+}
+
+async function runBotAnalysis() {
+  if (!state.activeExchange) {
+    showToast('Conecte uma corretora primeiro', 'warning');
+    return;
+  }
+  await runCryptoBotCycle();
+}
+
+function displayBotAnalysis(analysis) {
+  const container = document.getElementById('bot-analysis-content');
+  const badge = document.getElementById('bot-analysis-badge');
+  if (!container) return;
+
+  const rec = analysis.recommendation || 'HOLD';
+  const confidence = analysis.confidence || 50;
+  const risk = analysis.risk_level || 'MEDIUM';
+  const symbol = analysis.symbol || 'BTCUSDT';
+  const trend = analysis.trend || '';
+  const source = analysis.source || 'CryptoBot';
+
+  if (badge) {
+    badge.textContent = rec;
+    badge.className = `badge ${rec === 'BUY' ? 'success' : rec === 'SELL' ? 'error' : 'warning'}`;
+  }
+
+  container.innerHTML = `
+    <div class="analysis-result">
+      <div class="analysis-header">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span class="recommendation-badge ${rec}">${rec}</span>
+          <span class="analysis-symbol-tag">${symbol}</span>
+          <span class="badge info" style="font-size:10px">${source}</span>
+          ${trend ? `<span class="badge ${trend === 'ALTA' ? 'success' : trend === 'BAIXA' ? 'error' : 'warning'}" style="font-size:10px">Tendencia: ${trend}</span>` : ''}
+        </div>
+        <span class="badge ${risk === 'LOW' ? 'success' : risk === 'HIGH' || risk === 'EXTREME' ? 'error' : 'warning'}">
+          Risco: ${risk}
+        </span>
+      </div>
+      <div class="analysis-details">
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Confianca</div>
+          <div class="analysis-detail-value" style="color: ${confidence > 70 ? 'var(--accent-green)' : confidence > 40 ? 'var(--accent-orange)' : 'var(--accent-red)'}">${confidence}%</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Sentimento</div>
+          <div class="analysis-detail-value">${(analysis.sentiment || 'neutral').toUpperCase()}</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Entrada</div>
+          <div class="analysis-detail-value">${analysis.entry_price ? '$' + analysis.entry_price.toLocaleString() : 'N/A'}</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Target</div>
+          <div class="analysis-detail-value">${analysis.target_price ? '$' + analysis.target_price.toLocaleString() : 'N/A'}</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Stop Loss</div>
+          <div class="analysis-detail-value" style="color: var(--accent-red)">${analysis.stop_loss ? '$' + analysis.stop_loss.toLocaleString() : 'N/A'}</div>
+        </div>
+        <div class="analysis-detail">
+          <div class="analysis-detail-label">Timeframe</div>
+          <div class="analysis-detail-value">${(analysis.timeframe || 'medium').toUpperCase()}</div>
+        </div>
+      </div>
+      <div class="analysis-reasoning">
+        <strong>Raciocinio:</strong> ${analysis.reasoning || 'Sem detalhes disponiveis'}
+      </div>
+      ${analysis.factors ? `
+        <div class="analysis-factors">
+          ${analysis.factors.map(f => `<span class="factor-tag">${f}</span>`).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function addBotSignal(analysis) {
+  const signal = {
+    id: Date.now(),
+    timestamp: new Date(),
+    symbol: analysis.symbol || 'BTCUSDT',
+    recommendation: analysis.recommendation,
+    confidence: analysis.confidence,
+    source: analysis.source || 'CryptoBot'
+  };
+  botState.signals.unshift(signal);
+  if (botState.signals.length > 100) botState.signals = botState.signals.slice(0, 100);
+  updateBotSignalsUI();
+}
+
+function updateBotSignalsUI() {
+  const container = document.getElementById('bot-signals-body');
+  const countBadge = document.getElementById('bot-signals-count');
+  if (!container) return;
+
+  if (countBadge) {
+    countBadge.textContent = `${botState.signals.length} sinais`;
+  }
+
+  if (botState.signals.length === 0) {
+    container.innerHTML = '<div class="empty-state"><p>Nenhum sinal gerado ainda</p></div>';
+    return;
+  }
+
+  container.innerHTML = botState.signals.map(s => {
+    const time = s.timestamp instanceof Date
+      ? s.timestamp.toLocaleTimeString('pt-BR')
+      : new Date(s.timestamp).toLocaleTimeString('pt-BR');
+    return `
+      <div class="bot-signal-item">
+        <div class="bot-signal-left">
+          <span class="recommendation-badge-sm ${s.recommendation}">${s.recommendation}</span>
+          <span class="analysis-history-symbol">${s.symbol}</span>
+          <span class="badge info" style="font-size:9px">${s.source}</span>
+        </div>
+        <div class="bot-signal-right">
+          <span style="color: ${s.confidence > 70 ? 'var(--accent-green)' : s.confidence > 40 ? 'var(--accent-orange)' : 'var(--accent-red)'}">${s.confidence}%</span>
+          <span>${time}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
+}

@@ -75,6 +75,12 @@ const riskHandlers = require('./src/js/risk');
 ipcMain.handle('risk:calculate', async (e, config, portfolio, analysis) => riskHandlers.calculate(config, portfolio, analysis));
 ipcMain.handle('risk:validate-trade', async (e, config, trade, portfolio) => riskHandlers.validateTrade(config, trade, portfolio));
 
+// Bot handlers
+const botHandlers = require('./src/js/bot');
+ipcMain.handle('bot:get-info', async () => botHandlers.getBotInfo());
+ipcMain.handle('bot:analyze', async (e, exchangeConfig, symbol, interval) => botHandlers.analyze(exchangeConfig, symbol, interval));
+ipcMain.handle('bot:test-connection', async () => botHandlers.testConnection());
+
 // Window controls
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:maximize', () => {
