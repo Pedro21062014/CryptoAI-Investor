@@ -222,6 +222,13 @@ async function loadBalance(exchange) {
       // Also update balance details in the market card
       displayBalanceDetails(normalizedBalance, result.exchange || exchange);
 
+      if (Array.isArray(result.errors) && result.errors.length > 0) {
+        addLog('warning', `Avisos ao carregar saldo ${exchange}: ${result.errors.slice(0, 3).join(' | ')}`);
+      }
+      if (normalizedBalance.length === 0 && totalUsd === 0) {
+        showToast(`Saldo ${exchange}: API retornou zero/sem moedas. Verifique a pasta cache API.`, 'warning');
+      }
+
       addLog('info', `Saldo carregado de ${exchange}: ${formatUsd(totalUsd)}`);
       saveConfig();
     } else if (result.success && (!result.balance || result.balance.length === 0)) {

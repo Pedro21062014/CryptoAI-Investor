@@ -32,6 +32,21 @@ function resolveUsdValue(asset, amount, explicitUsdValue, priceMap = {}) {
   return price > 0 ? amount * price : 0;
 }
 
+function firstPositiveNumber(...values) {
+  for (const value of values) {
+    const n = toNumber(value, 0);
+    if (n > 0) return n;
+  }
+  return 0;
+}
+
+const BYBIT_BALANCE_COINS = [
+  'USDT', 'USDC', 'BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'ADA', 'DOGE', 'DOT',
+  'MATIC', 'POL', 'AVAX', 'SHIB', 'LTC', 'LINK', 'ATOM', 'UNI', 'NEAR', 'APE',
+  'ARB', 'OP', 'FET', 'SUI', 'APT', 'SEI', 'TIA', 'JUP', 'WIF', 'PEPE', 'BONK',
+  'FLOKI', 'RUNE'
+];
+
 // Exchange API implementations
 const exchanges = {
   bybit: {
@@ -109,7 +124,7 @@ const exchanges = {
 
     async getBalance(config) {
       const url = this.getUrl(config);
-      const accountTypes = ['UNIFIED', 'SPOT', 'CONTRACT'];
+      const walletAccountTypes = ['UNIFIED', 'SPOT', 'CONTRACT'];
       const priceMap = {};
 
       try {
@@ -131,65 +146,107 @@ const exchanges = {
       let hadSuccess = false;
       const errors = [];
 
-      for (const accountType of accountTypes) {
+      const mergeCoin = (coinData, accountType) => {
+        const coin = normalizeAsset(coinData.coin || coinData.asset || coinData.ccy);
+        if (!coin) return;
+
+        // Alguns retornos da Bybit Testnet trazem walletBalance = "0" e o valor real em equity/transferBalance.
+        // Por isso usamos o primeiro campo positivo em vez de `walletBalance || equity`.
+        const walletBalance = firstPositiveNumber(
+          coinData.walletBalance,
+          coinData.equity,
+          coinData.transferBalance,
+          coinData.free,
+          coinData.availableToWithdraw,
+          coinData.availableToBorrow,
+          coinData.bonus
+        );
+        const free = firstPositiveNumber(
+          coinData.free,
+          coinData.transferBalance,
+          coinData.availableToWithdraw,
+          coinData.availableToBorrow,
+          coinData.walletBalance,
+          coinData.equity
+        );
+        const locked = toNumber(coinData.locked, 0);
+        const usdValue = resolveUsdValue(coin, walletBalance, coinData.usdValue || coinData.eqUsd, priceMap);
+        if (walletBalance <= 0 && usdValue <= 0) return;
+
+        const current = merged.get(coin) || {
+          coin,
+          walletBalance: 0,
+          usdValue: 0,
+          free: 0,
+          locked: 0,
+          unrealisedPnl: 0,
+          accountTypes: []
+        };
+        current.walletBalance += walletBalance;
+        current.usdValue += usdValue;
+        current.free += free;
+        current.locked += locked;
+        current.unrealisedPnl += toNumber(coinData.unrealisedPnl, 0);
+        if (!current.accountTypes.includes(accountType)) current.accountTypes.push(accountType);
+        merged.set(coin, current);
+      };
+
+      const signedGet = async (path, params) => {
+        const timestamp = Date.now().toString();
+        const sign = this.sign(config.apiSecret, timestamp, config.apiKey, params);
+        return axios.get(`${url}${path}?${params}`, {
+          headers: {
+            'X-BAPI-API-KEY': config.apiKey,
+            'X-BAPI-TIMESTAMP': timestamp,
+            'X-BAPI-SIGN': sign,
+            'X-BAPI-RECV-WINDOW': '20000'
+          }
+        });
+      };
+
+      // Unified/Spot/Contract wallet balance endpoint.
+      for (const accountType of walletAccountTypes) {
         try {
-          const timestamp = Date.now().toString();
-          const params = `accountType=${accountType}`;
-          const sign = this.sign(config.apiSecret, timestamp, config.apiKey, params);
-          const response = await axios.get(`${url}/v5/account/wallet-balance?${params}`, {
-            headers: {
-              'X-BAPI-API-KEY': config.apiKey,
-              'X-BAPI-TIMESTAMP': timestamp,
-              'X-BAPI-SIGN': sign,
-              'X-BAPI-RECV-WINDOW': '20000'
-            }
-          });
+          const response = await signedGet('/v5/account/wallet-balance', `accountType=${accountType}`);
 
           if (response.data.retCode !== 0) {
-            errors.push(`${accountType}: ${response.data.retMsg || 'erro desconhecido'}`);
+            errors.push(`${accountType}: ${response.data.retCode || ''} ${response.data.retMsg || 'erro desconhecido'}`.trim());
             continue;
           }
 
           hadSuccess = true;
           const accounts = response.data.result.list || [];
           accounts.forEach(account => {
-            totalEquity += toNumber(account.totalEquity || account.totalWalletBalance || account.totalAvailableBalance, 0);
-            (account.coin || []).forEach(c => {
-              const coin = normalizeAsset(c.coin);
-              const walletBalance = toNumber(c.walletBalance || c.equity, 0);
-              const free = toNumber(c.free || c.availableToWithdraw || c.availableToBorrow || c.walletBalance, 0);
-              const locked = toNumber(c.locked, 0);
-              const usdValue = resolveUsdValue(coin, walletBalance, c.usdValue, priceMap);
-              if (walletBalance <= 0 && usdValue <= 0) return;
-
-              const current = merged.get(coin) || {
-                coin,
-                walletBalance: 0,
-                usdValue: 0,
-                free: 0,
-                locked: 0,
-                unrealisedPnl: 0,
-                accountTypes: []
-              };
-              current.walletBalance += walletBalance;
-              current.usdValue += usdValue;
-              current.free += free;
-              current.locked += locked;
-              current.unrealisedPnl += toNumber(c.unrealisedPnl, 0);
-              if (!current.accountTypes.includes(accountType)) current.accountTypes.push(accountType);
-              merged.set(coin, current);
-            });
+            totalEquity += firstPositiveNumber(account.totalEquity, account.totalWalletBalance, account.totalAvailableBalance, account.totalMarginBalance);
+            (account.coin || []).forEach(c => mergeCoin(c, account.accountType || accountType));
           });
         } catch (err) {
-          errors.push(`${accountType}: ${err.response?.data?.retMsg || err.message}`);
+          errors.push(`${accountType}: ${err.response?.data?.retMsg || err.response?.data?.msg || err.message}`);
+        }
+      }
+
+      // Funding wallet endpoint. In Bybit Testnet, faucet funds may stay in FUND and wallet-balance returns 0.
+      // Bybit docs also state funding wallet balance must be queried via the asset transfer endpoint.
+      for (let i = 0; i < BYBIT_BALANCE_COINS.length; i += 10) {
+        const coinChunk = BYBIT_BALANCE_COINS.slice(i, i + 10);
+        try {
+          const coinParam = coinChunk.join(',');
+          const params = `accountType=FUND&coin=${coinParam}`;
+          const response = await signedGet('/v5/asset/transfer/query-account-coins-balance', params);
+          if (response.data.retCode === 0) {
+            hadSuccess = true;
+            const balances = response.data.result?.balance || [];
+            balances.forEach(c => mergeCoin(c, 'FUND'));
+          } else {
+            errors.push(`FUND(${coinParam}): ${response.data.retCode || ''} ${response.data.retMsg || 'erro desconhecido'}`.trim());
+          }
+        } catch (err) {
+          errors.push(`FUND(${coinChunk.join(',')}): ${err.response?.data?.retMsg || err.response?.data?.msg || err.message}`);
         }
       }
 
       if (!hadSuccess) {
         const msg = errors.filter(Boolean).join(' | ') || 'erro desconhecido';
-        if (config.testnet) {
-          return { success: false, error: this.formatAuthError(config, msg) };
-        }
         return { success: false, error: this.formatAuthError(config, msg) };
       }
 
@@ -198,8 +255,9 @@ const exchanges = {
       return {
         success: true,
         balance: balanceItems,
-        totalEquity: totalEquity > 0 ? totalEquity : summedUsd,
-        exchange: 'bybit'
+        totalEquity: totalEquity > 0 ? Math.max(totalEquity, summedUsd) : summedUsd,
+        exchange: config.demo ? 'bybit-demo' : config.testnet ? 'bybit-testnet' : 'bybit',
+        errors: errors.filter(Boolean)
       };
     },
 
