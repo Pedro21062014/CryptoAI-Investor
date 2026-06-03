@@ -1,6 +1,6 @@
 {
   "name": "crypto-ai-investor",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "AI-Powered Crypto Investment Desktop Application",
   "main": "main.js",
   "author": "CryptoAI Investor",
@@ -29,7 +29,9 @@
       "target": [
         {
           "target": "zip",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.png",
@@ -40,7 +42,9 @@
       "target": [
         {
           "target": "deb",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.png",
