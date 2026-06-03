@@ -7,13 +7,22 @@ const exchanges = {
     baseUrl: 'https://api.bybit.com',
     testnetUrl: 'https://api-testnet.bybit.com',
 
+    sign(secret, timestamp, apiKey, params) {
+      const payload = timestamp + apiKey + '20000' + params;
+      return crypto.createHmac('sha256', secret).update(payload).digest('hex');
+    },
+
+    getUrl(config) {
+      return config.testnet ? this.testnetUrl : this.baseUrl;
+    },
+
     async testConnection(config) {
       try {
-        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/account/wallet-balance`;
+        const url = this.getUrl(config);
         const timestamp = Date.now().toString();
         const params = `accountType=UNIFIED`;
         const sign = this.sign(config.apiSecret, timestamp, config.apiKey, params);
-        const response = await axios.get(`${url}?${params}`, {
+        const response = await axios.get(`${url}/v5/account/wallet-balance?${params}`, {
           headers: {
             'X-BAPI-API-KEY': config.apiKey,
             'X-BAPI-TIMESTAMP': timestamp,
@@ -21,24 +30,26 @@ const exchanges = {
             'X-BAPI-RECV-WINDOW': '20000'
           }
         });
-        return { success: true, data: response.data };
+        if (response.data.retCode === 0) {
+          return { success: true, data: response.data };
+        }
+        return { success: false, error: response.data.retMsg || 'Erro desconhecido Bybit' };
       } catch (err) {
-        return { success: false, error: err.message };
+        const errMsg = err.response?.data?.retMsg || err.message;
+        if (config.testnet) {
+          return { success: false, error: `Bybit Testnet erro: ${errMsg}. Use API keys geradas em testnet.bybit.com` };
+        }
+        return { success: false, error: `Bybit: ${errMsg}` };
       }
-    },
-
-    sign(secret, timestamp, apiKey, params) {
-      const payload = timestamp + apiKey + '20000' + params;
-      return crypto.createHmac('sha256', secret).update(payload).digest('hex');
     },
 
     async getBalance(config) {
       try {
-        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/account/wallet-balance`;
+        const url = this.getUrl(config);
         const timestamp = Date.now().toString();
         const params = `accountType=UNIFIED`;
         const sign = this.sign(config.apiSecret, timestamp, config.apiKey, params);
-        const response = await axios.get(`${url}?${params}`, {
+        const response = await axios.get(`${url}/v5/account/wallet-balance?${params}`, {
           headers: {
             'X-BAPI-API-KEY': config.apiKey,
             'X-BAPI-TIMESTAMP': timestamp,
@@ -49,7 +60,6 @@ const exchanges = {
         if (response.data.retCode === 0) {
           const account = response.data.result.list?.[0] || {};
           const coins = (account.coin || []).filter(c => parseFloat(c.walletBalance) > 0);
-          // Bybit v5 returns usdValue for each coin and totalAvailableBalance for account
           const totalEquity = parseFloat(account.totalEquity || account.totalAvailableBalance || '0');
           const balanceItems = coins.map(c => ({
             coin: c.coin,
@@ -68,14 +78,18 @@ const exchanges = {
         }
         return { success: false, error: response.data.retMsg };
       } catch (err) {
-        return { success: false, error: err.message };
+        const errMsg = err.response?.data?.retMsg || err.message;
+        if (config.testnet) {
+          return { success: false, error: `Bybit Testnet: ${errMsg}. Use API keys de testnet.bybit.com` };
+        }
+        return { success: false, error: `Bybit: ${errMsg}` };
       }
     },
 
     async getMarkets(config) {
       try {
-        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/market/tickers`;
-        const response = await axios.get(`${url}?category=linear&symbol=BTCUSDT`);
+        const url = this.getUrl(config);
+        const response = await axios.get(`${url}/v5/market/tickers?category=linear&symbol=BTCUSDT`);
         return { success: true, data: response.data };
       } catch (err) {
         return { success: false, error: err.message };
@@ -84,7 +98,7 @@ const exchanges = {
 
     async placeOrder(config, order) {
       try {
-        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/order/create`;
+        const url = this.getUrl(config);
         const timestamp = Date.now().toString();
         const body = {
           category: 'linear',
@@ -97,7 +111,7 @@ const exchanges = {
         if (order.price) body.price = order.price.toString();
         const payload = timestamp + config.apiKey + '20000' + JSON.stringify(body);
         const sign = crypto.createHmac('sha256', config.apiSecret).update(payload).digest('hex');
-        const response = await axios.post(url, body, {
+        const response = await axios.post(`${url}/v5/order/create`, body, {
           headers: {
             'X-BAPI-API-KEY': config.apiKey,
             'X-BAPI-TIMESTAMP': timestamp,
@@ -114,8 +128,8 @@ const exchanges = {
 
     async getOrderBook(config, symbol) {
       try {
-        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/market/orderbook`;
-        const response = await axios.get(`${url}?category=linear&symbol=${symbol}`);
+        const url = this.getUrl(config);
+        const response = await axios.get(`${url}/v5/market/orderbook?category=linear&symbol=${symbol}`);
         return { success: true, data: response.data };
       } catch (err) {
         return { success: false, error: err.message };
@@ -124,8 +138,8 @@ const exchanges = {
 
     async getCandlesticks(config, symbol, interval = '60') {
       try {
-        const url = `${config.testnet ? this.testnetUrl : this.baseUrl}/v5/market/kline`;
-        const response = await axios.get(`${url}?category=linear&symbol=${symbol}&interval=${interval}`);
+        const url = this.getUrl(config);
+        const response = await axios.get(`${url}/v5/market/kline?category=linear&symbol=${symbol}&interval=${interval}`);
         return { success: true, data: response.data };
       } catch (err) {
         return { success: false, error: err.message };
@@ -135,10 +149,27 @@ const exchanges = {
 
   okx: {
     baseUrl: 'https://www.okx.com',
+    // OKX doesn't have a separate testnet URL - it uses "Demo Trading" mode
+    // activated by adding x-simulated-trading: 1 header to all requests
 
     sign(secret, timestamp, method, path, body = '') {
       const message = timestamp + method + path + body;
       return crypto.createHmac('sha256', secret).update(message).digest('base64');
+    },
+
+    getHeaders(config, timestamp, sign) {
+      const headers = {
+        'OK-ACCESS-KEY': config.apiKey,
+        'OK-ACCESS-SIGN': sign,
+        'OK-ACCESS-TIMESTAMP': timestamp,
+        'OK-ACCESS-PASSPHRASE': config.passphrase || '',
+        'Content-Type': 'application/json'
+      };
+      // OKX Demo Trading mode: add x-simulated-trading header instead of changing URL
+      if (config.testnet) {
+        headers['x-simulated-trading'] = '1';
+      }
+      return headers;
     },
 
     async testConnection(config) {
@@ -146,17 +177,22 @@ const exchanges = {
         const timestamp = new Date().toISOString();
         const path = '/api/v5/account/balance';
         const sign = this.sign(config.apiSecret, timestamp, 'GET', path);
-        const response = await axios.get(`${this.baseUrl}${path}`, {
-          headers: {
-            'OK-ACCESS-KEY': config.apiKey,
-            'OK-ACCESS-SIGN': sign,
-            'OK-ACCESS-TIMESTAMP': timestamp,
-            'OK-ACCESS-PASSPHRASE': config.passphrase || ''
-          }
-        });
-        return { success: true, data: response.data };
+        const headers = this.getHeaders(config, timestamp, sign);
+        const response = await axios.get(`${this.baseUrl}${path}`, { headers });
+        if (response.data.code === '0') {
+          return { success: true, data: response.data };
+        }
+        const errMsg = response.data.msg || 'Erro desconhecido OKX';
+        if (config.testnet) {
+          return { success: false, error: `OKX Demo Trading erro: ${errMsg}. Ative Demo Trading em okx.com > Trade > Demo Trading` };
+        }
+        return { success: false, error: `OKX: ${errMsg}` };
       } catch (err) {
-        return { success: false, error: err.message };
+        const errMsg = err.response?.data?.msg || err.message;
+        if (config.testnet) {
+          return { success: false, error: `OKX Demo Trading erro: ${errMsg}. Ative Demo Trading e use API keys com flag demo` };
+        }
+        return { success: false, error: `OKX: ${errMsg}` };
       }
     },
 
@@ -165,14 +201,8 @@ const exchanges = {
         const timestamp = new Date().toISOString();
         const path = '/api/v5/account/balance';
         const sign = this.sign(config.apiSecret, timestamp, 'GET', path);
-        const response = await axios.get(`${this.baseUrl}${path}`, {
-          headers: {
-            'OK-ACCESS-KEY': config.apiKey,
-            'OK-ACCESS-SIGN': sign,
-            'OK-ACCESS-TIMESTAMP': timestamp,
-            'OK-ACCESS-PASSPHRASE': config.passphrase || ''
-          }
-        });
+        const headers = this.getHeaders(config, timestamp, sign);
+        const response = await axios.get(`${this.baseUrl}${path}`, { headers });
         if (response.data.code === '0') {
           const account = response.data.data?.[0] || {};
           const details = account.details || [];
@@ -194,7 +224,11 @@ const exchanges = {
         }
         return { success: false, error: response.data.msg };
       } catch (err) {
-        return { success: false, error: err.message };
+        const errMsg = err.response?.data?.msg || err.message;
+        if (config.testnet) {
+          return { success: false, error: `OKX Demo Trading: ${errMsg}` };
+        }
+        return { success: false, error: `OKX: ${errMsg}` };
       }
     },
 
@@ -220,18 +254,12 @@ const exchanges = {
           ...(order.price ? { px: order.price.toString() } : {})
         });
         const sign = this.sign(config.apiSecret, timestamp, 'POST', path, body);
-        const response = await axios.post(`${this.baseUrl}${path}`, body, {
-          headers: {
-            'OK-ACCESS-KEY': config.apiKey,
-            'OK-ACCESS-SIGN': sign,
-            'OK-ACCESS-TIMESTAMP': timestamp,
-            'OK-ACCESS-PASSPHRASE': config.passphrase || '',
-            'Content-Type': 'application/json'
-          }
-        });
+        const headers = this.getHeaders(config, timestamp, sign);
+        const response = await axios.post(`${this.baseUrl}${path}`, body, { headers });
         return { success: response.data.code === '0', data: response.data };
       } catch (err) {
-        return { success: false, error: err.message };
+        const errMsg = err.response?.data?.msg || err.message;
+        return { success: false, error: errMsg };
       }
     },
 
@@ -263,14 +291,17 @@ const exchanges = {
     },
 
     buildQueryString(params) {
-      // Build a properly sorted query string from params object
       const keys = Object.keys(params).sort();
       return keys.map(k => `${k}=${params[k]}`).join('&');
     },
 
+    getUrl(config) {
+      return config.testnet ? this.testnetUrl : this.baseUrl;
+    },
+
     async testConnection(config) {
       try {
-        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const base = this.getUrl(config);
         const timestamp = Date.now();
         const params = {
           timestamp: timestamp,
@@ -288,13 +319,20 @@ const exchanges = {
         return { success: true, data: response.data };
       } catch (err) {
         const errMsg = err.response?.data?.msg || err.response?.data?.code || err.message;
-        return { success: false, error: `Binance 401: ${errMsg}` };
+        const httpStatus = err.response?.status;
+        if (config.testnet) {
+          if (httpStatus === 401 || httpStatus === 403) {
+            return { success: false, error: `Binance Testnet: API key invalida. Gere keys em testnet.binance.vision (nao use keys de producao!)` };
+          }
+          return { success: false, error: `Binance Testnet erro (${httpStatus}): ${errMsg}` };
+        }
+        return { success: false, error: `Binance (${httpStatus}): ${errMsg}` };
       }
     },
 
     async getBalance(config) {
       try {
-        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const base = this.getUrl(config);
         const timestamp = Date.now();
         const params = {
           timestamp: timestamp,
@@ -326,7 +364,7 @@ const exchanges = {
           const locked = parseFloat(b.locked || '0');
           const total = free + locked;
           let usdValue = 0;
-          if (asset === 'USDT' || asset === 'BUSD' || asset === 'USDC' || asset === 'TUSD') {
+          if (asset === 'USDT' || asset === 'BUSD' || asset === 'USDC' || asset === 'TUSD' || asset === 'DAI') {
             usdValue = total;
           } else if (priceMap[`${asset}USDT`]) {
             usdValue = total * priceMap[`${asset}USDT`];
@@ -361,13 +399,20 @@ const exchanges = {
         };
       } catch (err) {
         const errMsg = err.response?.data?.msg || err.response?.data?.code || err.message;
+        const httpStatus = err.response?.status;
+        if (config.testnet) {
+          if (httpStatus === 401 || httpStatus === 403) {
+            return { success: false, error: `Binance Testnet: API key invalida. Gere keys em testnet.binance.vision` };
+          }
+          return { success: false, error: `Binance Testnet: ${errMsg}` };
+        }
         return { success: false, error: `Binance: ${errMsg}` };
       }
     },
 
     async getMarkets(config) {
       try {
-        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const base = this.getUrl(config);
         const response = await axios.get(`${base}/api/v3/ticker/24hr`);
         return { success: true, data: response.data };
       } catch (err) {
@@ -377,7 +422,7 @@ const exchanges = {
 
     async placeOrder(config, order) {
       try {
-        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const base = this.getUrl(config);
         const timestamp = Date.now();
         const params = {
           symbol: order.symbol,
@@ -409,7 +454,7 @@ const exchanges = {
 
     async getOrderBook(config, symbol) {
       try {
-        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const base = this.getUrl(config);
         const response = await axios.get(`${base}/api/v3/depth?symbol=${symbol}&limit=20`);
         return { success: true, data: response.data };
       } catch (err) {
@@ -419,7 +464,7 @@ const exchanges = {
 
     async getCandlesticks(config, symbol, interval = '1h') {
       try {
-        const base = config.testnet ? this.testnetUrl : this.baseUrl;
+        const base = this.getUrl(config);
         const response = await axios.get(`${base}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=100`);
         return { success: true, data: response.data };
       } catch (err) {

@@ -1156,6 +1156,14 @@ function loadSavedConfig() {
             document.getElementById(`${ex}-apikey`).value = conf.apiKey || '';
             document.getElementById(`${ex}-apisecret`).value = conf.apiSecret || '';
           }
+          // Restore testnet checkbox
+          if (conf.testnet && document.getElementById(`${ex}-testnet`)) {
+            document.getElementById(`${ex}-testnet`).checked = true;
+          }
+          // Restore OKX passphrase
+          if (ex === 'okx' && conf.passphrase && document.getElementById('okx-passphrase')) {
+            document.getElementById('okx-passphrase').value = conf.passphrase || '';
+          }
         });
       }
 
