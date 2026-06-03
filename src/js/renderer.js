@@ -501,7 +501,10 @@ async function runAnalysisCycle() {
 
     if (analysisResult.success) {
       // Include symbol info in analysis for history tracking
-      analysisResult.analysis.symbol = pairList.join(', ');
+      // If AI recommended a specific symbol, use it; otherwise use monitored pairs
+      if (!analysisResult.analysis.symbol) {
+        analysisResult.analysis.symbol = pairList.join(', ');
+      }
       displayAnalysis(analysisResult.analysis, analysisResult.raw);
       addLog('success', `Análise concluída: ${analysisResult.analysis.recommendation}`);
       updateAIMetrics(analysisResult.raw ? analysisResult.raw.split(' ').length * 1.3 : 500);
@@ -861,25 +864,37 @@ async function executeAITrade(analysis) {
   if (!exchange) return;
 
   const side = analysis.recommendation === 'BUY' ? 'BUY' : 'SELL';
-  const quantity = 0.001; // Minimum safe quantity
+  const symbol = analysis.symbol || 'BTCUSDT';
+
+  // Calculate safe quantity based on coin type
+  let quantity = 0.001;
+  if (symbol.includes('DOGE') || symbol.includes('SHIB') || symbol.includes('PEPE') || symbol.includes('BONK') || symbol.includes('FLOKI')) {
+    quantity = 5000;
+  } else if (symbol.includes('XRP') || symbol.includes('ADA') || symbol.includes('DOT') || symbol.includes('MATIC') || symbol.includes('NEAR') || symbol.includes('APT') || symbol.includes('SEI')) {
+    quantity = 50;
+  } else if (symbol.includes('SOL') || symbol.includes('AVAX') || symbol.includes('LINK') || symbol.includes('ATOM') || symbol.includes('UNI') || symbol.includes('ARB') || symbol.includes('OP') || symbol.includes('SUI') || symbol.includes('TIA') || symbol.includes('FET') || symbol.includes('RUNE') || symbol.includes('APE') || symbol.includes('JUP') || symbol.includes('WIF')) {
+    quantity = 5;
+  } else if (symbol.includes('ETH') || symbol.includes('BNB')) {
+    quantity = 0.01;
+  }
 
   const order = {
-    symbol: 'BTCUSDT',
+    symbol: symbol,
     side: side,
     type: 'Market',
     quantity: quantity
   };
 
-  addLog('info', `[AUTO-TRADE] Executando ${side} ${quantity} BTCUSDT baseado na IA`);
+  addLog('info', `[AUTO-TRADE] Executando ${side} ${quantity} ${symbol} baseado na IA`);
 
   try {
     const result = await window.electronAPI.placeOrder(state.exchangeConfigs[exchange], order);
     if (result.success) {
-      showToast(`Auto-trade executado: ${side} ${quantity} BTCUSDT`, 'success');
-      addLog('success', `[AUTO-TRADE] ${side} ${quantity} BTCUSDT executado`);
+      showToast(`Auto-trade executado: ${side} ${quantity} ${symbol}`, 'success');
+      addLog('success', `[AUTO-TRADE] ${side} ${quantity} ${symbol} executado`);
       state.trades.push({
         time: new Date(),
-        symbol: 'BTCUSDT',
+        symbol: symbol,
         side: side,
         price: 'Market',
         quantity: quantity,
@@ -1566,7 +1581,10 @@ function updateCryptoBotUI() {
 async function runCryptoBotCycle() {
   if (!botState.running) return;
 
-  const symbol = document.getElementById('bot-symbol')?.value || 'BTCUSDT';
+  let symbol = document.getElementById('bot-symbol')?.value || 'BTCUSDT';
+  if (symbol === 'custom') {
+    symbol = document.getElementById('bot-symbol-custom')?.value?.trim()?.toUpperCase() || 'BTCUSDT';
+  }
   const interval = document.getElementById('bot-interval')?.value || '60';
   const autoTrade = document.getElementById('bot-auto-trade')?.checked || false;
 
@@ -1750,6 +1768,20 @@ function addBotSignal(analysis) {
   botState.signals.unshift(signal);
   if (botState.signals.length > 100) botState.signals = botState.signals.slice(0, 100);
   updateBotSignalsUI();
+}
+
+function handleBotSymbolChange() {
+  const select = document.getElementById('bot-symbol');
+  const customInput = document.getElementById('bot-symbol-custom');
+  if (select && customInput) {
+    if (select.value === 'custom') {
+      customInput.style.display = 'block';
+      customInput.focus();
+    } else {
+      customInput.style.display = 'none';
+      customInput.value = '';
+    }
+  }
 }
 
 function updateBotSignalsUI() {

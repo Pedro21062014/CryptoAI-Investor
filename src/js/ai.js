@@ -146,22 +146,27 @@ function extractResponse(provider, data) {
 }
 
 const SYSTEM_PROMPT = `You are an expert cryptocurrency investment AI analyst. Your role is to:
-1. Analyze market data, technical indicators, and news sentiment
-2. Assess risk levels for potential trades
-3. Provide clear BUY/SELL/HOLD recommendations with confidence scores
-4. Always consider the user's risk tolerance and maximum loss limits
-5. Consider market volatility, volume trends, and macro factors
-6. Provide specific entry/exit price levels when possible
+1. Scan and analyze ALL available cryptocurrency markets - not just BTC or ETH
+2. Look for the BEST trading opportunities across ALL coins available on the exchange
+3. Identify coins with strong momentum, breakouts, or reversal patterns
+4. Assess risk levels for potential trades
+5. Provide clear BUY/SELL/HOLD recommendations with confidence scores
+6. Always consider the user's risk tolerance and maximum loss limits
+7. Consider market volatility, volume trends, and macro factors
+8. Provide specific entry/exit price levels when possible
+
+IMPORTANT: You can recommend ANY cryptocurrency that you believe will perform well - not just BTC or ETH. Look for opportunities in altcoins, memecoins, DeFi tokens, Layer 2 tokens, AI tokens, and any other crypto asset. If you see a strong signal on a smaller coin with high growth potential, recommend it! Be bold and look beyond the top 10.
 
 You MUST respond in JSON format:
 {
   "recommendation": "BUY|SELL|HOLD",
   "confidence": 0-100,
   "risk_level": "LOW|MEDIUM|HIGH|EXTREME",
+  "symbol": "THE_SPECIFIC_COIN_PAIR (e.g. SOLUSDT, AVAXUSDT, DOGEUSDT, PEPEUSDT, FETUSDT, etc)",
   "entry_price": number or null,
   "target_price": number or null,
   "stop_loss": number or null,
-  "reasoning": "detailed explanation",
+  "reasoning": "detailed explanation of why THIS coin is the best opportunity right now",
   "factors": ["factor1", "factor2", ...],
   "timeframe": "short|medium|long",
   "sentiment": "bullish|bearish|neutral"
@@ -218,7 +223,9 @@ module.exports = {
       const provider = aiProviders[config.provider];
       if (!provider) return { success: false, error: 'AI provider not supported' };
 
-      const prompt = `Perform a comprehensive crypto investment analysis:
+      const prompt = `Perform a comprehensive crypto investment analysis.
+
+IMPORTANT: You must scan ALL available cryptocurrency pairs and recommend the BEST opportunity - not just BTC/ETH. Look at altcoins, new tokens, AI tokens, DeFi tokens, Layer 2 tokens, and any coin with strong signals. If a smaller coin has a stronger signal than BTC, recommend that instead!
 
 MARKET DATA:
 ${JSON.stringify(marketData, null, 2)}
@@ -231,7 +238,7 @@ RISK PARAMETERS:
 - Max Loss: ${config.maxLoss || '5'}%
 - Investment Style: ${config.investmentStyle || 'moderate'}
 
-Provide detailed analysis with clear recommendations.`;
+You MUST include a "symbol" field in your response with the specific pair you recommend (e.g., "SOLUSDT", "AVAXUSDT", "DOGEUSDT", "PEPEUSDT", "FETUSDT"). If the market data contains multiple pairs, pick the one with the strongest signal. Be bold - recommend the coin with the best opportunity regardless of market cap.`;
 
       const messages = [
         { role: 'system', content: SYSTEM_PROMPT },

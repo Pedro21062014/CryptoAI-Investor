@@ -951,7 +951,7 @@
             <div class="card-body">
               <div class="form-group">
                 <label>Par de Trading</label>
-                <select id="bot-symbol">
+                <select id="bot-symbol" onchange="handleBotSymbolChange()">
                   <option value="BTCUSDT">BTC/USDT</option>
                   <option value="ETHUSDT">ETH/USDT</option>
                   <option value="BNBUSDT">BNB/USDT</option>
@@ -962,7 +962,29 @@
                   <option value="DOTUSDT">DOT/USDT</option>
                   <option value="MATICUSDT">MATIC/USDT</option>
                   <option value="AVAXUSDT">AVAX/USDT</option>
+                  <option value="SHIBUSDT">SHIB/USDT</option>
+                  <option value="LTCUSDT">LTC/USDT</option>
+                  <option value="LINKUSDT">LINK/USDT</option>
+                  <option value="ATOMUSDT">ATOM/USDT</option>
+                  <option value="UNIUSDT">UNI/USDT</option>
+                  <option value="NEARUSDT">NEAR/USDT</option>
+                  <option value="APEUSDT">APE/USDT</option>
+                  <option value="ARBUSDT">ARB/USDT</option>
+                  <option value="OPUSDT">OP/USDT</option>
+                  <option value="FETUSDT">FET/USDT</option>
+                  <option value="SUIUSDT">SUI/USDT</option>
+                  <option value="APTUSDT">APT/USDT</option>
+                  <option value="SEIUSDT">SEI/USDT</option>
+                  <option value="TIAUSDT">TIA/USDT</option>
+                  <option value="JUPUSDT">JUP/USDT</option>
+                  <option value="WIFUSDT">WIF/USDT</option>
+                  <option value="PEPEUSDT">PEPE/USDT</option>
+                  <option value="BONKUSDT">BONK/USDT</option>
+                  <option value="FLOKIUSDT">FLOKI/USDT</option>
+                  <option value="RUNEUSDT">RUNE/USDT</option>
+                  <option value="custom">Personalizado...</option>
                 </select>
+                <input type="text" id="bot-symbol-custom" class="custom-model-input" placeholder="Ex: PEPEUSDT, FETUSDT, INJUSDT" style="display:none; margin-top:8px;">
               </div>
               <div class="form-group">
                 <label>Intervalo</label>
