@@ -49,6 +49,10 @@ document.addEventListener('DOMContentLoaded', () => {
   showApiCachePath();
   loadSecureCredentials();
   setupUpdateProgressListener();
+  document.getElementById('app-language')?.addEventListener('change', () => {
+    saveConfig();
+    addLog('info', `Idioma das respostas da IA alterado para ${getSelectedLanguage()}`);
+  });
 });
 
 async function showApiCachePath() {
@@ -496,6 +500,10 @@ function handleModelChange(provider) {
   }
 }
 
+function getSelectedLanguage() {
+  return document.getElementById('app-language')?.value || 'pt-BR';
+}
+
 function getAIConfig(provider) {
   const selectEl = document.getElementById(`${provider}-model`);
   let model = selectEl?.value || 'default';
@@ -509,7 +517,8 @@ function getAIConfig(provider) {
     apiKey: document.getElementById(`${provider}-apikey`)?.value || '',
     model: model,
     temperature: parseFloat(document.getElementById(`${provider}-temperature`)?.value || 0.3),
-    maxTokens: parseInt(document.getElementById('max-tokens')?.value || 2000)
+    maxTokens: parseInt(document.getElementById('max-tokens')?.value || 2000),
+    language: getSelectedLanguage()
   };
 
   if (provider === 'custom') {
@@ -619,7 +628,7 @@ async function runAnalysisCycle() {
     }
 
     // AI Analysis
-    const aiConfig = { ...state.aiConfigs[state.activeAI], ...state.riskConfig };
+    const aiConfig = { ...state.aiConfigs[state.activeAI], ...state.riskConfig, language: getSelectedLanguage() };
     const analysisResult = await window.electronAPI.aiGetAnalysis(
       aiConfig,
       marketData,
@@ -1454,7 +1463,8 @@ function saveConfig() {
       aiMetrics: state.aiMetrics,
       modelSelections: modelSelections,
       totalBalance: state.totalBalance,
-      balanceDetails: state.balanceDetails
+      balanceDetails: state.balanceDetails,
+      appLanguage: getSelectedLanguage()
     };
     saveSecureCredentials();
     localStorage.setItem('cryptoai-config', JSON.stringify(config));
@@ -1471,6 +1481,9 @@ function loadSavedConfig() {
       if (config.riskConfig) Object.assign(state.riskConfig, config.riskConfig);
       if (config.activeExchange) state.activeExchange = config.activeExchange;
       if (config.activeAI) state.activeAI = config.activeAI;
+      if (config.appLanguage && document.getElementById('app-language')) {
+        document.getElementById('app-language').value = config.appLanguage;
+      }
 
       // Restore exchange statuses
       if (config.exchangeConfigs) {
@@ -1939,7 +1952,7 @@ async function runCryptoBotCycle(force = false) {
 
     // AI analysis with news/sentiment context
     if (botState.mode === 'ai' || botState.mode === 'hybrid') {
-      const aiConfig = { ...state.aiConfigs[state.activeAI], ...state.riskConfig };
+      const aiConfig = { ...state.aiConfigs[state.activeAI], ...state.riskConfig, language: getSelectedLanguage() };
       let marketData = {};
       const candleResult = await window.electronAPI.getCandlesticks(
         state.exchangeConfigs[state.activeExchange],

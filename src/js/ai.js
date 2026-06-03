@@ -172,6 +172,19 @@ You MUST respond in JSON format:
   "sentiment": "bullish|bearish|neutral"
 }`;
 
+
+function getLanguageInstruction(language) {
+  const lang = String(language || 'pt-BR').toLowerCase();
+  const languageName = lang.startsWith('en') ? 'English' : lang.startsWith('es') ? 'Spanish' : 'Portuguese (Brazil)';
+  return `LANGUAGE REQUIREMENT: The user selected ${languageName}. Keep the JSON keys exactly as specified, but write all human-readable text values in ${languageName}, especially reasoning, factors, explanations, warnings, and any narrative text. Do not mix languages unless market terms are proper names.`;
+}
+
+function buildSystemPrompt(config) {
+  return `${SYSTEM_PROMPT}
+
+${getLanguageInstruction(config.language)}`;
+}
+
 module.exports = {
   async analyze(config, data) {
     try {
@@ -179,7 +192,7 @@ module.exports = {
       if (!provider) return { success: false, error: 'AI provider not supported' };
 
       const messages = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: buildSystemPrompt(config) },
         { role: 'user', content: `Analyze this crypto market data:\n${JSON.stringify(data, null, 2)}` }
       ];
 
@@ -223,7 +236,9 @@ module.exports = {
       const provider = aiProviders[config.provider];
       if (!provider) return { success: false, error: 'AI provider not supported' };
 
-      const prompt = `Perform a comprehensive crypto investment analysis.
+      const prompt = `${getLanguageInstruction(config.language)}
+
+Perform a comprehensive crypto investment analysis.
 
 IMPORTANT: You must scan ALL available cryptocurrency pairs and recommend the BEST opportunity - not just BTC/ETH. Look at altcoins, new tokens, AI tokens, DeFi tokens, Layer 2 tokens, and any coin with strong signals. If a smaller coin has a stronger signal than BTC, recommend that instead!
 
@@ -241,7 +256,7 @@ RISK PARAMETERS:
 You MUST include a "symbol" field in your response with the specific pair you recommend (e.g., "SOLUSDT", "AVAXUSDT", "DOGEUSDT", "PEPEUSDT", "FETUSDT"). If the market data contains multiple pairs, pick the one with the strongest signal. Be bold - recommend the coin with the best opportunity regardless of market cap.`;
 
       const messages = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: buildSystemPrompt(config) },
         { role: 'user', content: prompt }
       ];
 
