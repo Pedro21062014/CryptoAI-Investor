@@ -1817,3 +1817,98 @@ function updateBotSignalsUI() {
     `;
   }).join('');
 }
+
+// ===== Sidebar Collapse =====
+let sidebarCollapsed = false;
+
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const mainContent = document.getElementById('main-content');
+  const collapseBtn = sidebar.querySelector('.sidebar-collapse-btn svg');
+  
+  sidebarCollapsed = !sidebarCollapsed;
+  
+  if (sidebarCollapsed) {
+    sidebar.classList.add('collapsed');
+    mainContent.classList.add('sidebar-collapsed');
+    if (collapseBtn) {
+      collapseBtn.innerHTML = '<polyline points="9 18 15 12 9 6"/>';
+    }
+    // Save state
+    localStorage.setItem('cryptoai-sidebar-collapsed', 'true');
+  } else {
+    sidebar.classList.remove('collapsed');
+    mainContent.classList.remove('sidebar-collapsed');
+    if (collapseBtn) {
+      collapseBtn.innerHTML = '<polyline points="15 18 9 12 15 6"/>';
+    }
+    localStorage.setItem('cryptoai-sidebar-collapsed', 'false');
+  }
+}
+
+// Restore sidebar state
+function loadSidebarState() {
+  const saved = localStorage.getItem('cryptoai-sidebar-collapsed');
+  if (saved === 'true') {
+    sidebarCollapsed = false; // Will be toggled to true
+    toggleSidebar();
+  }
+}
+
+// ===== Settings (Run on Startup / Background) =====
+async function loadAppSettings() {
+  try {
+    if (window.electronAPI && window.electronAPI.getSettings) {
+      const settings = await window.electronAPI.getSettings();
+      const runOnStartupEl = document.getElementById('run-on-startup');
+      const allowBackgroundEl = document.getElementById('allow-background');
+      if (runOnStartupEl) runOnStartupEl.checked = settings.runOnStartup || false;
+      if (allowBackgroundEl) allowBackgroundEl.checked = settings.allowBackground !== undefined ? settings.allowBackground : true;
+    }
+  } catch (e) {
+    // Ignore - settings page might not exist yet
+  }
+}
+
+async function toggleRunOnStartup(enabled) {
+  try {
+    if (window.electronAPI && window.electronAPI.setRunOnStartup) {
+      await window.electronAPI.setRunOnStartup(enabled);
+      showToast(enabled ? 'App iniciará com o sistema' : 'Auto-início desativado', 'success');
+      addLog('info', `Rodar ao iniciar: ${enabled ? 'ativado' : 'desativado'}`);
+    }
+  } catch (e) {
+    showToast('Erro ao configurar auto-início: ' + e.message, 'error');
+  }
+}
+
+async function toggleAllowBackground(enabled) {
+  try {
+    if (window.electronAPI && window.electronAPI.setAllowBackground) {
+      await window.electronAPI.setAllowBackground(enabled);
+      showToast(enabled ? 'Execução em segundo plano ativada' : 'App fechará ao fechar a janela', 'success');
+      addLog('info', `Execução em segundo plano: ${enabled ? 'ativada' : 'desativada'}`);
+    }
+  } catch (e) {
+    showToast('Erro ao configurar segundo plano: ' + e.message, 'error');
+  }
+}
+
+async function quitApp() {
+  try {
+    if (window.electronAPI && window.electronAPI.quitApp) {
+      await window.electronAPI.quitApp();
+    }
+  } catch (e) {
+    // Fallback
+    window.close();
+  }
+}
+
+// Initialize sidebar state and settings on load
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    loadSidebarState();
+    loadAppSettings();
+  }, 100);
+});

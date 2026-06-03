@@ -11,6 +11,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   close: () => ipcRenderer.invoke('window:close'),
   isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
 
+  // Settings
+  getSettings: () => ipcRenderer.invoke('settings:get'),
+  setRunOnStartup: (enabled) => ipcRenderer.invoke('settings:set-run-on-startup', enabled),
+  setAllowBackground: (enabled) => ipcRenderer.invoke('settings:set-allow-background', enabled),
+  quitApp: () => ipcRenderer.invoke('app:quit'),
+
   // Exchange APIs
   testConnection: (config) => ipcRenderer.invoke('exchange:test-connection', config),
   getBalance: (config) => ipcRenderer.invoke('exchange:get-balance', config),

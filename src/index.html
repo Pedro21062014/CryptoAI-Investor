@@ -11,6 +11,9 @@
   <!-- Custom Title Bar -->
   <div id="titlebar">
     <div class="titlebar-drag">
+      <button class="titlebar-btn sidebar-toggle-titlebar" onclick="toggleSidebar()" title="Alternar barra lateral">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
       <div class="titlebar-icon">
         <img src="../build/icon.png" alt="CryptoAI" id="app-icon">
       </div>
@@ -88,6 +91,9 @@
     </nav>
 
     <div class="sidebar-footer">
+      <button class="sidebar-collapse-btn" onclick="toggleSidebar()" title="Recolher barra lateral">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
       <div class="status-indicator" id="bot-status">
         <span class="status-dot offline"></span>
         <span class="status-text">Bot Parado</span>
@@ -1440,6 +1446,26 @@
             </div>
             <div class="form-group checkbox-group">
               <label><input type="checkbox" id="sound-alerts" checked> Alertas sonoros</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><h3>Sistema</h3></div>
+          <div class="card-body">
+            <div class="form-group checkbox-group">
+              <label><input type="checkbox" id="run-on-startup" onchange="toggleRunOnStartup(this.checked)"> Rodar quando o sistema iniciar</label>
+              <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">O aplicativo será iniciado automaticamente ao ligar o computador.</small>
+            </div>
+            <div class="form-group checkbox-group">
+              <label><input type="checkbox" id="allow-background" onchange="toggleAllowBackground(this.checked)"> Executar em segundo plano</label>
+              <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">Ao fechar a janela, o app continuará rodando na bandeja do sistema. O bot continuará operando.</small>
+            </div>
+            <div class="form-group" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-color);">
+              <button class="btn btn-sell" onclick="quitApp()" style="width:100%;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                Fechar Aplicativo Completamente
+              </button>
             </div>
           </div>
         </div>
