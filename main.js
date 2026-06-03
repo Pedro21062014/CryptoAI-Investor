@@ -1,6 +1,8 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const https = require('https');
+const { spawn } = require('child_process');
 
 let mainWindow;
 let tray;
@@ -15,6 +17,11 @@ const apiCacheDir = path.join(appDataDir, 'cache');
 process.env.CRYPTOAI_CACHE_DIR = apiCacheDir;
 const settingsPath = path.join(configDir, 'settings.json');
 const secureCredentialsPath = path.join(configDir, 'secure-credentials.json');
+const updatesDir = path.join(appDataDir, 'updates');
+const repoOwner = 'Pedro21062014';
+const repoName = 'CryptoAI-Investor';
+let latestUpdateInfo = null;
+let downloadedUpdatePath = null;
 
 // Saves sanitized request/response JSON for all axios API calls in the local cache folder.
 require('./src/js/api-cache').installAxiosCache();
@@ -60,6 +67,141 @@ function writeSecureCredentials(data) {
   ensureConfigDir();
   fs.writeFileSync(secureCredentialsPath, JSON.stringify(encryptSecureJson(data), null, 2), 'utf8');
   return { success: true, encrypted: safeStorage.isEncryptionAvailable(), path: secureCredentialsPath };
+}
+
+function compareVersions(a, b) {
+  const pa = String(a || '0').replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+  const pb = String(b || '0').replace(/^v/i, '').split('.').map(n => parseInt(n, 10) || 0);
+  const len = Math.max(pa.length, pb.length);
+  for (let i = 0; i < len; i++) {
+    const diff = (pa[i] || 0) - (pb[i] || 0);
+    if (diff > 0) return 1;
+    if (diff < 0) return -1;
+  }
+  return 0;
+}
+
+function requestJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, {
+      headers: {
+        'User-Agent': 'CryptoAI-Investor-Updater',
+        'Accept': 'application/vnd.github+json, application/json'
+      }
+    }, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        return resolve(requestJson(res.headers.location));
+      }
+      let body = '';
+      res.setEncoding('utf8');
+      res.on('data', chunk => { body += chunk; });
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          return reject(new Error(`HTTP ${res.statusCode}: ${body.slice(0, 200)}`));
+        }
+        try { resolve(JSON.parse(body)); }
+        catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(20000, () => req.destroy(new Error('Timeout ao verificar atualizacao')));
+  });
+}
+
+function selectReleaseAsset(release) {
+  const assets = release?.assets || [];
+  if (process.platform === 'win32') {
+    return assets.find(a => /Setup\.exe$/i.test(a.name)) || assets.find(a => /win\.zip$/i.test(a.name)) || assets.find(a => /\.exe$/i.test(a.name));
+  }
+  if (process.platform === 'linux') {
+    return assets.find(a => /\.deb$/i.test(a.name)) || assets.find(a => /linux/i.test(a.name));
+  }
+  return assets[0];
+}
+
+async function checkForUpdates() {
+  const currentVersion = app.getVersion();
+  const packageUrl = `https://raw.githubusercontent.com/${repoOwner}/${repoName}/main/package.json?ts=${Date.now()}`;
+  const remotePackage = await requestJson(packageUrl);
+  const latestVersion = remotePackage.version;
+  const hasUpdate = compareVersions(latestVersion, currentVersion) > 0;
+  let release = null;
+  let asset = null;
+  if (hasUpdate) {
+    release = await requestJson(`https://api.github.com/repos/${repoOwner}/${repoName}/releases/tags/v${latestVersion}`);
+    asset = selectReleaseAsset(release);
+  }
+  latestUpdateInfo = {
+    currentVersion,
+    latestVersion,
+    hasUpdate,
+    releaseUrl: release?.html_url || `https://github.com/${repoOwner}/${repoName}/releases/tag/v${latestVersion}`,
+    releaseName: release?.name || `v${latestVersion}`,
+    releaseNotes: release?.body || '',
+    asset: asset ? { name: asset.name, size: asset.size, downloadUrl: asset.browser_download_url } : null
+  };
+  return latestUpdateInfo;
+}
+
+function downloadFileWithProgress(url, destination, event) {
+  return new Promise((resolve, reject) => {
+    fs.mkdirSync(path.dirname(destination), { recursive: true });
+    const file = fs.createWriteStream(destination);
+    const startedAt = Date.now();
+    let received = 0;
+    let total = 0;
+    const download = currentUrl => {
+      const req = https.get(currentUrl, { headers: { 'User-Agent': 'CryptoAI-Investor-Updater' } }, res => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          return download(res.headers.location);
+        }
+        if (res.statusCode < 200 || res.statusCode >= 300) {
+          file.close();
+          fs.rm(destination, { force: true }, () => {});
+          return reject(new Error(`HTTP ${res.statusCode} ao baixar atualizacao`));
+        }
+        total = parseInt(res.headers['content-length'] || '0', 10) || 0;
+        res.on('data', chunk => {
+          received += chunk.length;
+          const percent = total ? Math.round((received / total) * 100) : 0;
+          const elapsed = Math.max(1, (Date.now() - startedAt) / 1000);
+          event?.sender?.send('update:download-progress', { received, total, percent, speed: received / elapsed, filePath: destination });
+        });
+        res.pipe(file);
+        file.on('finish', () => file.close(() => resolve(destination)));
+      });
+      req.on('error', err => {
+        file.close();
+        fs.rm(destination, { force: true }, () => {});
+        reject(err);
+      });
+      req.setTimeout(120000, () => req.destroy(new Error('Timeout no download da atualizacao')));
+    };
+    download(url);
+  });
+}
+
+async function downloadLatestUpdate(event) {
+  if (!latestUpdateInfo || !latestUpdateInfo.hasUpdate) latestUpdateInfo = await checkForUpdates();
+  if (!latestUpdateInfo.hasUpdate) return { success: false, error: 'Nenhuma atualizacao disponivel' };
+  if (!latestUpdateInfo.asset?.downloadUrl) return { success: false, error: 'Release nao tem arquivo compativel para baixar' };
+  const destination = path.join(updatesDir, latestUpdateInfo.asset.name);
+  downloadedUpdatePath = await downloadFileWithProgress(latestUpdateInfo.asset.downloadUrl, destination, event);
+  return { success: true, filePath: downloadedUpdatePath, asset: latestUpdateInfo.asset };
+}
+
+async function installDownloadedUpdate() {
+  if (!downloadedUpdatePath || !fs.existsSync(downloadedUpdatePath)) return { success: false, error: 'Arquivo de atualizacao nao encontrado. Baixe novamente.' };
+  if (process.platform === 'win32' && downloadedUpdatePath.toLowerCase().endsWith('.exe')) {
+    spawn(downloadedUpdatePath, [], { detached: true, stdio: 'ignore' }).unref();
+    isQuitting = true;
+    setTimeout(() => app.quit(), 1000);
+    return { success: true, quitting: true };
+  }
+  const result = await shell.openPath(downloadedUpdatePath);
+  return { success: !result, error: result || null, filePath: downloadedUpdatePath };
 }
 
 
@@ -212,6 +354,10 @@ ipcMain.handle('secure:get-info', () => ({
   encryptionAvailable: safeStorage.isEncryptionAvailable(),
   path: secureCredentialsPath
 }));
+ipcMain.handle('updates:check', async () => checkForUpdates());
+ipcMain.handle('updates:download', async (event) => downloadLatestUpdate(event));
+ipcMain.handle('updates:install', async () => installDownloadedUpdate());
+ipcMain.handle('updates:get-downloaded-path', () => ({ filePath: downloadedUpdatePath, exists: !!downloadedUpdatePath && fs.existsSync(downloadedUpdatePath) }));
 
 // Exchange API handlers
 const exchangeHandlers = require('./src/js/exchanges');

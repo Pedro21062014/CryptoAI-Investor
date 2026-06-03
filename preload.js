@@ -10,6 +10,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setSecureCredentials: (data) => ipcRenderer.invoke('secure:set-credentials', data),
   clearSecureCredentials: () => ipcRenderer.invoke('secure:clear-credentials'),
   getSecureInfo: () => ipcRenderer.invoke('secure:get-info'),
+  checkForUpdates: () => ipcRenderer.invoke('updates:check'),
+  downloadUpdate: () => ipcRenderer.invoke('updates:download'),
+  installUpdate: () => ipcRenderer.invoke('updates:install'),
+  getDownloadedUpdatePath: () => ipcRenderer.invoke('updates:get-downloaded-path'),
+  onUpdateDownloadProgress: (callback) => ipcRenderer.on('update:download-progress', (e, data) => callback(data)),
 
   // Window controls
   minimize: () => ipcRenderer.invoke('window:minimize'),

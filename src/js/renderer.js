@@ -48,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
   addLog('info', 'Aplicativo iniciado com sucesso');
   showApiCachePath();
   loadSecureCredentials();
+  setupUpdateProgressListener();
 });
 
 async function showApiCachePath() {
@@ -2141,6 +2142,104 @@ async function toggleAllowBackground(enabled) {
   }
 }
 
+
+
+function formatBytes(bytes) {
+  const value = toFiniteNumber(bytes, 0);
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / 1024 / 1024).toFixed(1)} MB`;
+  return `${(value / 1024 / 1024 / 1024).toFixed(1)} GB`;
+}
+
+function setUpdateStatus(status, details) {
+  const statusEl = document.getElementById('update-status');
+  const detailsEl = document.getElementById('update-details');
+  if (statusEl) statusEl.textContent = status;
+  if (detailsEl) detailsEl.textContent = details || '';
+}
+
+function setUpdateActions(html) {
+  const actions = document.getElementById('update-actions');
+  if (actions) actions.innerHTML = html || '';
+}
+
+function setupUpdateProgressListener() {
+  try {
+    window.electronAPI?.onUpdateDownloadProgress?.((progress) => {
+      const wrap = document.getElementById('update-progress-wrap');
+      const fill = document.getElementById('update-progress-fill');
+      const text = document.getElementById('update-progress-text');
+      if (wrap) wrap.style.display = 'block';
+      if (fill) fill.style.width = `${progress.percent || 0}%`;
+      if (text) text.textContent = `${progress.percent || 0}% - ${formatBytes(progress.received)} de ${formatBytes(progress.total)} (${formatBytes(progress.speed)}/s)`;
+    });
+  } catch (e) {}
+}
+
+async function checkAppUpdates() {
+  const btn = document.getElementById('btn-check-updates');
+  if (btn) btn.disabled = true;
+  setUpdateStatus('Verificando atualizações...', 'Consultando package.json no GitHub...');
+  setUpdateActions('');
+  try {
+    const info = await window.electronAPI.checkForUpdates();
+    if (!info.hasUpdate) {
+      setUpdateStatus('Seu app está atualizado', `Versão atual: ${info.currentVersion} | GitHub: ${info.latestVersion}`);
+      showToast('Nenhuma atualização disponível', 'success');
+      return;
+    }
+    const assetText = info.asset ? `${info.asset.name} (${formatBytes(info.asset.size)})` : 'Nenhum instalador compatível encontrado';
+    setUpdateStatus(`Nova versão disponível: v${info.latestVersion}`, `Versão atual: v${info.currentVersion} | Arquivo: ${assetText}`);
+    setUpdateActions(`
+      <button class="btn btn-sm btn-primary" onclick="downloadAppUpdate()" ${info.asset ? '' : 'disabled'}>Baixar atualização</button>
+      <button class="btn btn-sm btn-outline" onclick="window.open('${info.releaseUrl}', '_blank')">Ver release</button>
+    `);
+    showToast(`Atualização disponível: v${info.latestVersion}`, 'info');
+  } catch (e) {
+    setUpdateStatus('Erro ao verificar atualizações', e.message);
+    showToast('Erro ao verificar atualizações: ' + e.message, 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function downloadAppUpdate() {
+  setUpdateStatus('Baixando atualização...', 'Não feche o aplicativo durante o download.');
+  setUpdateActions('');
+  const wrap = document.getElementById('update-progress-wrap');
+  const fill = document.getElementById('update-progress-fill');
+  const text = document.getElementById('update-progress-text');
+  if (wrap) wrap.style.display = 'block';
+  if (fill) fill.style.width = '0%';
+  if (text) text.textContent = 'Preparando download...';
+  try {
+    const result = await window.electronAPI.downloadUpdate();
+    if (!result.success) throw new Error(result.error || 'Falha no download');
+    setUpdateStatus('Download concluído', `Arquivo salvo em: ${result.filePath}`);
+    setUpdateActions(`
+      <button class="btn btn-sm btn-primary" onclick="installAppUpdate()">Instalar atualização</button>
+      <button class="btn btn-sm btn-outline" onclick="checkAppUpdates()">Verificar novamente</button>
+    `);
+    showToast('Atualização baixada com sucesso', 'success');
+  } catch (e) {
+    setUpdateStatus('Erro ao baixar atualização', e.message);
+    setUpdateActions('<button class="btn btn-sm btn-primary" onclick="downloadAppUpdate()">Tentar baixar novamente</button>');
+    showToast('Erro ao baixar atualização: ' + e.message, 'error');
+  }
+}
+
+async function installAppUpdate() {
+  try {
+    setUpdateStatus('Iniciando instalador...', 'O aplicativo pode fechar para concluir a instalação.');
+    const result = await window.electronAPI.installUpdate();
+    if (!result.success) throw new Error(result.error || 'Falha ao iniciar instalador');
+    showToast('Instalador iniciado', 'success');
+  } catch (e) {
+    setUpdateStatus('Erro ao instalar atualização', e.message);
+    showToast('Erro ao instalar atualização: ' + e.message, 'error');
+  }
+}
 
 async function openApiCacheFolder() {
   try {

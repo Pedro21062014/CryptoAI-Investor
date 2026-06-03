@@ -1522,6 +1522,23 @@
               <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">Ao fechar a janela, o app continuará rodando na bandeja do sistema. O bot continuará operando.</small>
             </div>
             <div class="form-group" style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border-color);">
+              <label>Atualizações</label>
+              <div id="update-panel" style="padding:12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-tertiary);margin-top:8px;margin-bottom:14px;">
+                <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">
+                  <div>
+                    <div id="update-status" style="font-size:13px;font-weight:600;color:var(--text-primary);">Clique para verificar atualizações</div>
+                    <div id="update-details" style="font-size:11px;color:var(--text-muted);margin-top:4px;">A verificação compara a versão local com o package.json do GitHub.</div>
+                  </div>
+                  <button class="btn btn-sm btn-primary" id="btn-check-updates" onclick="checkAppUpdates()">Verificar</button>
+                </div>
+                <div id="update-progress-wrap" style="display:none;margin-top:12px;">
+                  <div style="height:8px;background:rgba(255,255,255,0.08);border-radius:99px;overflow:hidden;">
+                    <div id="update-progress-fill" style="height:100%;width:0%;background:var(--gradient-primary);transition:width .2s;"></div>
+                  </div>
+                  <div id="update-progress-text" style="font-size:11px;color:var(--text-muted);margin-top:6px;">0%</div>
+                </div>
+                <div id="update-actions" style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;"></div>
+              </div>
               <button class="btn btn-outline" onclick="showSecureStorageInfo()" style="width:100%;margin-bottom:10px;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 Ver Segurança das Credenciais
