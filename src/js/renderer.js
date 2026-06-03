@@ -120,8 +120,15 @@ function getExchangeConfig(exchange) {
     exchange: exchange,
     apiKey: document.getElementById(`${exchange}-apikey`)?.value || '',
     apiSecret: document.getElementById(`${exchange}-apisecret`)?.value || '',
-    testnet: document.getElementById(`${exchange}-testnet`)?.checked || false
+    testnet: document.getElementById(`${exchange}-testnet`)?.checked || false,
+    demo: document.getElementById(`${exchange}-demo`)?.checked || false
   };
+
+  // Bybit trata Testnet e Demo Trading como ambientes diferentes.
+  // Se ambos forem marcados por engano, prioriza Demo para evitar erro 401/10003 por domínio incorreto.
+  if (exchange === 'bybit' && config.demo) {
+    config.testnet = false;
+  }
 
   if (exchange === 'okx') {
     config.passphrase = document.getElementById('okx-passphrase')?.value || '';
@@ -1194,9 +1201,12 @@ function loadSavedConfig() {
             document.getElementById(`${ex}-apikey`).value = conf.apiKey || '';
             document.getElementById(`${ex}-apisecret`).value = conf.apiSecret || '';
           }
-          // Restore testnet checkbox
+          // Restore testnet/demo checkboxes
           if (conf.testnet && document.getElementById(`${ex}-testnet`)) {
             document.getElementById(`${ex}-testnet`).checked = true;
+          }
+          if (conf.demo && document.getElementById(`${ex}-demo`)) {
+            document.getElementById(`${ex}-demo`).checked = true;
           }
           // Restore OKX passphrase
           if (ex === 'okx' && conf.passphrase && document.getElementById('okx-passphrase')) {

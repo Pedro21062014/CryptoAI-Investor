@@ -271,6 +271,10 @@
               <label><input type="checkbox" id="bybit-testnet"> Usar Testnet</label>
               <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">Gere API keys em testnet.bybit.com (keys de producao nao funcionam).</small>
             </div>
+            <div class="form-group checkbox-group">
+              <label><input type="checkbox" id="bybit-demo"> Usar Demo Trading</label>
+              <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">Use quando a key foi criada no Demo Trading da Bybit. Nao marque junto com Testnet.</small>
+            </div>
             <div class="form-actions">
               <button class="btn btn-primary" onclick="connectExchange('bybit')">Conectar</button>
               <button class="btn btn-outline" onclick="testExchange('bybit')">Testar</button>

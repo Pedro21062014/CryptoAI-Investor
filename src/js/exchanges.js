@@ -37,6 +37,7 @@ const exchanges = {
   bybit: {
     baseUrl: 'https://api.bybit.com',
     testnetUrl: 'https://api-testnet.bybit.com',
+    demoUrl: 'https://api-demo.bybit.com',
 
     sign(secret, timestamp, apiKey, params) {
       const payload = timestamp + apiKey + '20000' + params;
@@ -44,34 +45,66 @@ const exchanges = {
     },
 
     getUrl(config) {
+      if (config.demo) return this.demoUrl;
       return config.testnet ? this.testnetUrl : this.baseUrl;
     },
 
-    async testConnection(config) {
-      try {
-        const url = this.getUrl(config);
-        const timestamp = Date.now().toString();
-        const params = `accountType=UNIFIED`;
-        const sign = this.sign(config.apiSecret, timestamp, config.apiKey, params);
-        const response = await axios.get(`${url}/v5/account/wallet-balance?${params}`, {
-          headers: {
-            'X-BAPI-API-KEY': config.apiKey,
-            'X-BAPI-TIMESTAMP': timestamp,
-            'X-BAPI-SIGN': sign,
-            'X-BAPI-RECV-WINDOW': '20000'
-          }
-        });
-        if (response.data.retCode === 0) {
-          return { success: true, data: response.data };
-        }
-        return { success: false, error: response.data.retMsg || 'Erro desconhecido Bybit' };
-      } catch (err) {
-        const errMsg = err.response?.data?.retMsg || err.message;
-        if (config.testnet) {
-          return { success: false, error: `Bybit Testnet erro: ${errMsg}. Use API keys geradas em testnet.bybit.com` };
-        }
-        return { success: false, error: `Bybit: ${errMsg}` };
+    getEnvironmentName(config) {
+      if (config.demo) return 'Bybit Demo Trading';
+      if (config.testnet) return 'Bybit Testnet';
+      return 'Bybit';
+    },
+
+    formatAuthError(config, message) {
+      const envName = this.getEnvironmentName(config);
+      if (config.demo) {
+        return `${envName}: ${message}. Use API keys criadas no Demo Trading da Bybit e deixe Testnet desmarcado.`;
       }
+      if (config.testnet) {
+        return `${envName}: ${message}. Use API keys criadas em testnet.bybit.com e nao keys de producao/Demo.`;
+      }
+      return `${envName}: ${message}`;
+    },
+
+    async testConnection(config) {
+      const url = this.getUrl(config);
+      const accountTypes = ['UNIFIED', 'SPOT', 'CONTRACT'];
+      const errors = [];
+
+      for (const accountType of accountTypes) {
+        try {
+          const timestamp = Date.now().toString();
+          const params = `accountType=${accountType}`;
+          const sign = this.sign(config.apiSecret, timestamp, config.apiKey, params);
+          const response = await axios.get(`${url}/v5/account/wallet-balance?${params}`, {
+            headers: {
+              'X-BAPI-API-KEY': config.apiKey,
+              'X-BAPI-TIMESTAMP': timestamp,
+              'X-BAPI-SIGN': sign,
+              'X-BAPI-RECV-WINDOW': '20000'
+            }
+          });
+          if (response.data.retCode === 0) {
+            return { success: true, data: response.data, accountType };
+          }
+
+          const retCode = response.data.retCode;
+          const retMsg = response.data.retMsg || 'Erro desconhecido Bybit';
+          errors.push(`${accountType}: ${retCode ? retCode + ' - ' : ''}${retMsg}`);
+
+          // Erros de autenticação/ambiente não dependem do tipo de conta; para de tentar.
+          if ([10003, 10004, 10005, 10007, 10010].includes(Number(retCode))) break;
+        } catch (err) {
+          const status = err.response?.status;
+          const retCode = err.response?.data?.retCode;
+          const retMsg = err.response?.data?.retMsg || err.response?.data?.msg || err.message;
+          errors.push(`${accountType}: ${status ? `HTTP ${status} - ` : ''}${retCode ? retCode + ' - ' : ''}${retMsg}`);
+          if (status === 401 || [10003, 10004, 10005, 10007, 10010].includes(Number(retCode))) break;
+        }
+      }
+
+      const msg = errors.join(' | ') || 'Erro desconhecido Bybit';
+      return { success: false, error: this.formatAuthError(config, msg) };
     },
 
     async getBalance(config) {
@@ -155,9 +188,9 @@ const exchanges = {
       if (!hadSuccess) {
         const msg = errors.filter(Boolean).join(' | ') || 'erro desconhecido';
         if (config.testnet) {
-          return { success: false, error: `Bybit Testnet: ${msg}. Use API keys de testnet.bybit.com` };
+          return { success: false, error: this.formatAuthError(config, msg) };
         }
-        return { success: false, error: `Bybit: ${msg}` };
+        return { success: false, error: this.formatAuthError(config, msg) };
       }
 
       const balanceItems = Array.from(merged.values()).sort((a, b) => b.usdValue - a.usdValue);
