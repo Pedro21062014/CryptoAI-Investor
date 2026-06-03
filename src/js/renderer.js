@@ -27,6 +27,7 @@ const state = {
   },
   totalBalance: 0,
   balanceDetails: [],
+  balanceHistory: [],
   balanceRefreshInterval: null
 };
 
@@ -43,8 +44,10 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSavedConfig();
   loadSavedTheme();
   loadAnalysisHistory();
+  loadBalanceHistory();
   addLog('info', 'Aplicativo iniciado com sucesso');
   showApiCachePath();
+  loadSecureCredentials();
 });
 
 async function showApiCachePath() {
@@ -55,6 +58,91 @@ async function showApiCachePath() {
     }
   } catch (e) {
     // Ignore cache path errors
+  }
+}
+
+function sanitizeExchangeConfigsForStorage(configs = {}) {
+  const sanitized = {};
+  Object.keys(configs || {}).forEach(ex => {
+    const { apiKey, apiSecret, passphrase, ...rest } = configs[ex] || {};
+    sanitized[ex] = rest;
+  });
+  return sanitized;
+}
+
+function sanitizeAIConfigsForStorage(configs = {}) {
+  const sanitized = {};
+  Object.keys(configs || {}).forEach(provider => {
+    const { apiKey, ...rest } = configs[provider] || {};
+    sanitized[provider] = rest;
+  });
+  return sanitized;
+}
+
+async function saveSecureCredentials() {
+  try {
+    if (!window.electronAPI?.setSecureCredentials) return;
+    await window.electronAPI.setSecureCredentials({
+      exchangeConfigs: state.exchangeConfigs,
+      aiConfigs: state.aiConfigs
+    });
+  } catch (e) {
+    addLog('warning', `Nao foi possivel salvar credenciais seguras: ${e.message}`);
+  }
+}
+
+async function loadSecureCredentials() {
+  try {
+    if (!window.electronAPI?.getSecureCredentials) return;
+    const secure = await window.electronAPI.getSecureCredentials();
+    if (secure?.exchangeConfigs) {
+      Object.keys(secure.exchangeConfigs).forEach(ex => {
+        state.exchangeConfigs[ex] = { ...(state.exchangeConfigs[ex] || {}), ...(secure.exchangeConfigs[ex] || {}) };
+        const conf = state.exchangeConfigs[ex];
+        if (document.getElementById(`${ex}-apikey`)) document.getElementById(`${ex}-apikey`).value = conf.apiKey || '';
+        if (document.getElementById(`${ex}-apisecret`)) document.getElementById(`${ex}-apisecret`).value = conf.apiSecret || '';
+        if (ex === 'okx' && document.getElementById('okx-passphrase')) document.getElementById('okx-passphrase').value = conf.passphrase || '';
+      });
+    }
+    if (secure?.aiConfigs) {
+      Object.keys(secure.aiConfigs).forEach(provider => {
+        state.aiConfigs[provider] = { ...(state.aiConfigs[provider] || {}), ...(secure.aiConfigs[provider] || {}) };
+        if (document.getElementById(`${provider}-apikey`)) {
+          document.getElementById(`${provider}-apikey`).value = state.aiConfigs[provider].apiKey || '';
+        }
+      });
+    }
+    updateWalletUI();
+    addLog('info', 'Credenciais seguras carregadas');
+  } catch (e) {
+    addLog('warning', `Erro ao carregar credenciais seguras: ${e.message}`);
+  }
+}
+
+async function showSecureStorageInfo() {
+  try {
+    const info = await window.electronAPI?.getSecureInfo?.();
+    const msg = info?.encryptionAvailable
+      ? `Credenciais criptografadas pelo sistema operacional. Arquivo: ${info.path}`
+      : `Criptografia do sistema indisponivel. Credenciais ficam ofuscadas/base64 no arquivo: ${info?.path || '--'}`;
+    showToast(msg, info?.encryptionAvailable ? 'success' : 'warning');
+    addLog(info?.encryptionAvailable ? 'success' : 'warning', msg);
+  } catch (e) {
+    showToast('Erro ao verificar seguranca: ' + e.message, 'error');
+  }
+}
+
+async function clearSecureCredentials() {
+  if (!confirm('Limpar todas as credenciais salvas? Voce precisara digitar as API keys novamente.')) return;
+  try {
+    await window.electronAPI?.clearSecureCredentials?.();
+    state.exchangeConfigs = {};
+    state.aiConfigs = {};
+    saveConfig();
+    showToast('Credenciais salvas foram limpas', 'success');
+    addLog('warning', 'Credenciais seguras limpas pelo usuario');
+  } catch (e) {
+    showToast('Erro ao limpar credenciais: ' + e.message, 'error');
   }
 }
 
@@ -215,6 +303,8 @@ async function loadBalance(exchange) {
       // Save balance to state and cache
       state.totalBalance = totalUsd;
       state.balanceDetails = normalizedBalance;
+      recordBalanceSnapshot(exchange, totalUsd, normalizedBalance);
+      updateWalletUI(result.exchange || exchange);
 
       const balanceEl = document.getElementById('total-balance');
       if (balanceEl) balanceEl.textContent = formatUsd(totalUsd);
@@ -811,6 +901,114 @@ function loadAnalysisHistory() {
   }
 }
 
+
+// ===== Wallet & Balance History =====
+function loadBalanceHistory() {
+  try {
+    const saved = localStorage.getItem('cryptoai-balance-history');
+    state.balanceHistory = saved ? JSON.parse(saved) : [];
+    updateWalletUI();
+  } catch (e) {
+    state.balanceHistory = [];
+  }
+}
+
+function saveBalanceHistory() {
+  try {
+    localStorage.setItem('cryptoai-balance-history', JSON.stringify(state.balanceHistory));
+  } catch (e) {}
+}
+
+function recordBalanceSnapshot(exchange, totalUsd, balanceDetails) {
+  const last = state.balanceHistory[0];
+  const now = Date.now();
+  if (last && last.exchange === exchange && Math.abs(toFiniteNumber(last.totalUsd, 0) - totalUsd) < 0.01 && (now - new Date(last.timestamp).getTime()) < 60000) {
+    return;
+  }
+  state.balanceHistory.unshift({
+    id: now,
+    timestamp: new Date().toISOString(),
+    exchange,
+    totalUsd,
+    coinCount: balanceDetails.length,
+    topCoins: balanceDetails.slice(0, 8).map(c => ({ coin: c.coin, usdValue: c.usdValue, walletBalance: c.walletBalance }))
+  });
+  if (state.balanceHistory.length > 500) state.balanceHistory = state.balanceHistory.slice(0, 500);
+  saveBalanceHistory();
+}
+
+function updateWalletUI(sourceLabel) {
+  const totalEl = document.getElementById('wallet-total-balance');
+  const countEl = document.getElementById('wallet-coin-count');
+  const exEl = document.getElementById('wallet-active-exchange');
+  const histCountEl = document.getElementById('wallet-history-count');
+  const sourceBadge = document.getElementById('wallet-source-badge');
+  const lastUpdate = document.getElementById('wallet-last-update');
+  const tbody = document.getElementById('wallet-balances-tbody');
+
+  if (totalEl) totalEl.textContent = formatUsd(state.totalBalance);
+  if (countEl) countEl.textContent = state.balanceDetails.length;
+  if (exEl) exEl.textContent = state.activeExchange || '--';
+  if (histCountEl) histCountEl.textContent = state.balanceHistory.length;
+  if (sourceBadge && sourceLabel) sourceBadge.textContent = sourceLabel;
+  if (lastUpdate && state.balanceHistory[0]) lastUpdate.textContent = new Date(state.balanceHistory[0].timestamp).toLocaleString('pt-BR');
+
+  if (tbody) {
+    if (!state.balanceDetails.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-row">Nenhum saldo carregado</td></tr>';
+    } else {
+      tbody.innerHTML = state.balanceDetails.map(c => `
+        <tr>
+          <td><strong>${c.coin}</strong></td>
+          <td style="font-family:var(--font-mono)">${toFiniteNumber(c.walletBalance, 0).toLocaleString('en-US', { maximumFractionDigits: 8 })}</td>
+          <td style="font-family:var(--font-mono)">${toFiniteNumber(c.free, 0).toLocaleString('en-US', { maximumFractionDigits: 8 })}</td>
+          <td style="font-family:var(--font-mono)">${toFiniteNumber(c.locked, 0).toLocaleString('en-US', { maximumFractionDigits: 8 })}</td>
+          <td style="font-family:var(--font-mono)">${formatUsd(c.usdValue)}</td>
+          <td>${Array.isArray(c.accountTypes) ? c.accountTypes.join(', ') : '--'}</td>
+        </tr>
+      `).join('');
+    }
+  }
+  updateBalanceHistoryUI();
+}
+
+function updateBalanceHistoryUI() {
+  const container = document.getElementById('wallet-history-body');
+  if (!container) return;
+  if (!state.balanceHistory.length) {
+    container.innerHTML = '<div class="empty-state"><p>Nenhum snapshot de saldo ainda</p></div>';
+    return;
+  }
+  container.innerHTML = state.balanceHistory.slice(0, 100).map((h, idx) => {
+    const previous = state.balanceHistory[idx + 1];
+    const delta = previous ? toFiniteNumber(h.totalUsd, 0) - toFiniteNumber(previous.totalUsd, 0) : 0;
+    const deltaPct = previous && previous.totalUsd ? (delta / previous.totalUsd) * 100 : 0;
+    return `
+      <div class="analysis-history-item">
+        <div class="analysis-history-row">
+          <div class="analysis-history-left">
+            <span class="analysis-history-symbol">${h.exchange}</span>
+            <span class="badge info">${h.coinCount} moedas</span>
+          </div>
+          <div class="analysis-history-right">
+            <span style="font-family:var(--font-mono);font-weight:700">${formatUsd(h.totalUsd)}</span>
+            ${previous ? `<span class="market-change ${delta >= 0 ? 'positive' : 'negative'}">${delta >= 0 ? '+' : ''}${formatUsd(delta)} (${deltaPct.toFixed(2)}%)</span>` : ''}
+            <span class="analysis-history-time">${new Date(h.timestamp).toLocaleString('pt-BR')}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function clearBalanceHistory() {
+  if (!confirm('Limpar todo o histórico de saldo?')) return;
+  state.balanceHistory = [];
+  saveBalanceHistory();
+  updateWalletUI();
+  showToast('Histórico de saldo limpo', 'success');
+}
+
 // ===== Trading =====
 let currentTradeSide = 'BUY';
 
@@ -1184,8 +1382,8 @@ function saveConfig() {
     });
 
     const config = {
-      exchangeConfigs: state.exchangeConfigs,
-      aiConfigs: state.aiConfigs,
+      exchangeConfigs: sanitizeExchangeConfigsForStorage(state.exchangeConfigs),
+      aiConfigs: sanitizeAIConfigsForStorage(state.aiConfigs),
       riskConfig: state.riskConfig,
       activeExchange: state.activeExchange,
       activeAI: state.activeAI,
@@ -1195,6 +1393,7 @@ function saveConfig() {
       totalBalance: state.totalBalance,
       balanceDetails: state.balanceDetails
     };
+    saveSecureCredentials();
     localStorage.setItem('cryptoai-config', JSON.stringify(config));
   } catch (e) {
     // Ignore storage errors
@@ -1300,6 +1499,7 @@ function loadSavedConfig() {
         }
       }
 
+      updateWalletUI(state.activeExchange || 'cache');
       addLog('info', 'Configurações salvas restauradas');
 
       // Auto-load balance from connected exchange after a short delay

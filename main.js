@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, Notification, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -14,9 +14,54 @@ const configDir = path.join(appDataDir, 'config');
 const apiCacheDir = path.join(appDataDir, 'cache');
 process.env.CRYPTOAI_CACHE_DIR = apiCacheDir;
 const settingsPath = path.join(configDir, 'settings.json');
+const secureCredentialsPath = path.join(configDir, 'secure-credentials.json');
 
 // Saves sanitized request/response JSON for all axios API calls in the local cache folder.
 require('./src/js/api-cache').installAxiosCache();
+
+function ensureConfigDir() {
+  if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+}
+
+function encryptSecureJson(data) {
+  const plain = Buffer.from(JSON.stringify(data || {}), 'utf8');
+  if (safeStorage.isEncryptionAvailable()) {
+    return {
+      encrypted: true,
+      payload: safeStorage.encryptString(plain.toString('utf8')).toString('base64')
+    };
+  }
+  return {
+    encrypted: false,
+    payload: plain.toString('base64')
+  };
+}
+
+function decryptSecureJson(fileData) {
+  if (!fileData || !fileData.payload) return {};
+  const buffer = Buffer.from(fileData.payload, 'base64');
+  if (fileData.encrypted) {
+    return JSON.parse(safeStorage.decryptString(buffer));
+  }
+  return JSON.parse(buffer.toString('utf8'));
+}
+
+function readSecureCredentials() {
+  try {
+    if (!fs.existsSync(secureCredentialsPath)) return { exchangeConfigs: {}, aiConfigs: {} };
+    const fileData = JSON.parse(fs.readFileSync(secureCredentialsPath, 'utf8'));
+    return decryptSecureJson(fileData);
+  } catch (e) {
+    return { exchangeConfigs: {}, aiConfigs: {}, error: e.message };
+  }
+}
+
+function writeSecureCredentials(data) {
+  ensureConfigDir();
+  fs.writeFileSync(secureCredentialsPath, JSON.stringify(encryptSecureJson(data), null, 2), 'utf8');
+  return { success: true, encrypted: safeStorage.isEncryptionAvailable(), path: secureCredentialsPath };
+}
+
 
 function loadSettings() {
   try {
@@ -32,7 +77,7 @@ function loadSettings() {
 
 function saveSettings() {
   try {
-    if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+    ensureConfigDir();
     fs.writeFileSync(settingsPath, JSON.stringify({
       runOnStartup,
       allowBackground
@@ -153,6 +198,20 @@ ipcMain.handle('cache:open-folder', async () => {
   const result = await shell.openPath(apiCacheDir);
   return { success: !result, error: result || null, path: apiCacheDir };
 });
+ipcMain.handle('secure:get-credentials', () => readSecureCredentials());
+ipcMain.handle('secure:set-credentials', (e, data) => writeSecureCredentials(data));
+ipcMain.handle('secure:clear-credentials', () => {
+  try {
+    if (fs.existsSync(secureCredentialsPath)) fs.unlinkSync(secureCredentialsPath);
+    return { success: true };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+});
+ipcMain.handle('secure:get-info', () => ({
+  encryptionAvailable: safeStorage.isEncryptionAvailable(),
+  path: secureCredentialsPath
+}));
 
 // Exchange API handlers
 const exchangeHandlers = require('./src/js/exchanges');

@@ -6,6 +6,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAssetsPath: () => ipcRenderer.invoke('get-assets-path'),
   getCachePath: () => ipcRenderer.invoke('cache:get-path'),
   openCacheFolder: () => ipcRenderer.invoke('cache:open-folder'),
+  getSecureCredentials: () => ipcRenderer.invoke('secure:get-credentials'),
+  setSecureCredentials: (data) => ipcRenderer.invoke('secure:set-credentials', data),
+  clearSecureCredentials: () => ipcRenderer.invoke('secure:clear-credentials'),
+  getSecureInfo: () => ipcRenderer.invoke('secure:get-info'),
 
   // Window controls
   minimize: () => ipcRenderer.invoke('window:minimize'),
