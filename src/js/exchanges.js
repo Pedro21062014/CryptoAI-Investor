@@ -1,6 +1,37 @@
 const axios = require('axios');
 const crypto = require('crypto');
 
+const STABLECOINS = new Set(['USDT', 'USDC', 'BUSD', 'TUSD', 'DAI', 'FDUSD', 'USD', 'USDP', 'PYUSD']);
+
+function toNumber(value, fallback = 0) {
+  if (value === null || value === undefined || value === '') return fallback;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function normalizeAsset(asset = '') {
+  return String(asset).trim().toUpperCase();
+}
+
+function stablecoinUsdValue(asset, amount) {
+  return STABLECOINS.has(normalizeAsset(asset)) ? amount : 0;
+}
+
+function priceFromMap(asset, priceMap) {
+  const coin = normalizeAsset(asset);
+  if (!coin || STABLECOINS.has(coin)) return 1;
+  return priceMap[`${coin}USDT`] || priceMap[`${coin}USDC`] || priceMap[`${coin}FDUSD`] || priceMap[`${coin}BUSD`] || 0;
+}
+
+function resolveUsdValue(asset, amount, explicitUsdValue, priceMap = {}) {
+  const explicit = toNumber(explicitUsdValue, NaN);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  const stable = stablecoinUsdValue(asset, amount);
+  if (stable > 0) return stable;
+  const price = priceFromMap(asset, priceMap);
+  return price > 0 ? amount * price : 0;
+}
+
 // Exchange API implementations
 const exchanges = {
   bybit: {
@@ -44,46 +75,99 @@ const exchanges = {
     },
 
     async getBalance(config) {
+      const url = this.getUrl(config);
+      const accountTypes = ['UNIFIED', 'SPOT', 'CONTRACT'];
+      const priceMap = {};
+
       try {
-        const url = this.getUrl(config);
-        const timestamp = Date.now().toString();
-        const params = `accountType=UNIFIED`;
-        const sign = this.sign(config.apiSecret, timestamp, config.apiKey, params);
-        const response = await axios.get(`${url}/v5/account/wallet-balance?${params}`, {
-          headers: {
-            'X-BAPI-API-KEY': config.apiKey,
-            'X-BAPI-TIMESTAMP': timestamp,
-            'X-BAPI-SIGN': sign,
-            'X-BAPI-RECV-WINDOW': '20000'
-          }
+        const [spotTickers, linearTickers] = await Promise.allSettled([
+          axios.get(`${url}/v5/market/tickers?category=spot`),
+          axios.get(`${url}/v5/market/tickers?category=linear`)
+        ]);
+        [spotTickers, linearTickers].forEach(result => {
+          const list = result.value?.data?.result?.list || [];
+          list.forEach(t => {
+            const price = toNumber(t.lastPrice || t.markPrice || t.indexPrice, 0);
+            if (t.symbol && price > 0) priceMap[t.symbol] = price;
+          });
         });
-        if (response.data.retCode === 0) {
-          const account = response.data.result.list?.[0] || {};
-          const coins = (account.coin || []).filter(c => parseFloat(c.walletBalance) > 0);
-          const totalEquity = parseFloat(account.totalEquity || account.totalAvailableBalance || '0');
-          const balanceItems = coins.map(c => ({
-            coin: c.coin,
-            walletBalance: parseFloat(c.walletBalance || '0'),
-            usdValue: parseFloat(c.usdValue || c.walletBalance || '0'),
-            free: parseFloat(c.free || c.availableToWithdraw || '0'),
-            locked: parseFloat(c.locked || '0'),
-            unrealisedPnl: parseFloat(c.unrealisedPnl || '0')
-          }));
-          return {
-            success: true,
-            balance: balanceItems,
-            totalEquity: totalEquity,
-            exchange: 'bybit'
-          };
+      } catch (e) { /* preços são apenas fallback */ }
+
+      const merged = new Map();
+      let totalEquity = 0;
+      let hadSuccess = false;
+      const errors = [];
+
+      for (const accountType of accountTypes) {
+        try {
+          const timestamp = Date.now().toString();
+          const params = `accountType=${accountType}`;
+          const sign = this.sign(config.apiSecret, timestamp, config.apiKey, params);
+          const response = await axios.get(`${url}/v5/account/wallet-balance?${params}`, {
+            headers: {
+              'X-BAPI-API-KEY': config.apiKey,
+              'X-BAPI-TIMESTAMP': timestamp,
+              'X-BAPI-SIGN': sign,
+              'X-BAPI-RECV-WINDOW': '20000'
+            }
+          });
+
+          if (response.data.retCode !== 0) {
+            errors.push(`${accountType}: ${response.data.retMsg || 'erro desconhecido'}`);
+            continue;
+          }
+
+          hadSuccess = true;
+          const accounts = response.data.result.list || [];
+          accounts.forEach(account => {
+            totalEquity += toNumber(account.totalEquity || account.totalWalletBalance || account.totalAvailableBalance, 0);
+            (account.coin || []).forEach(c => {
+              const coin = normalizeAsset(c.coin);
+              const walletBalance = toNumber(c.walletBalance || c.equity, 0);
+              const free = toNumber(c.free || c.availableToWithdraw || c.availableToBorrow || c.walletBalance, 0);
+              const locked = toNumber(c.locked, 0);
+              const usdValue = resolveUsdValue(coin, walletBalance, c.usdValue, priceMap);
+              if (walletBalance <= 0 && usdValue <= 0) return;
+
+              const current = merged.get(coin) || {
+                coin,
+                walletBalance: 0,
+                usdValue: 0,
+                free: 0,
+                locked: 0,
+                unrealisedPnl: 0,
+                accountTypes: []
+              };
+              current.walletBalance += walletBalance;
+              current.usdValue += usdValue;
+              current.free += free;
+              current.locked += locked;
+              current.unrealisedPnl += toNumber(c.unrealisedPnl, 0);
+              if (!current.accountTypes.includes(accountType)) current.accountTypes.push(accountType);
+              merged.set(coin, current);
+            });
+          });
+        } catch (err) {
+          errors.push(`${accountType}: ${err.response?.data?.retMsg || err.message}`);
         }
-        return { success: false, error: response.data.retMsg };
-      } catch (err) {
-        const errMsg = err.response?.data?.retMsg || err.message;
-        if (config.testnet) {
-          return { success: false, error: `Bybit Testnet: ${errMsg}. Use API keys de testnet.bybit.com` };
-        }
-        return { success: false, error: `Bybit: ${errMsg}` };
       }
+
+      if (!hadSuccess) {
+        const msg = errors.filter(Boolean).join(' | ') || 'erro desconhecido';
+        if (config.testnet) {
+          return { success: false, error: `Bybit Testnet: ${msg}. Use API keys de testnet.bybit.com` };
+        }
+        return { success: false, error: `Bybit: ${msg}` };
+      }
+
+      const balanceItems = Array.from(merged.values()).sort((a, b) => b.usdValue - a.usdValue);
+      const summedUsd = balanceItems.reduce((sum, b) => sum + toNumber(b.usdValue, 0), 0);
+      return {
+        success: true,
+        balance: balanceItems,
+        totalEquity: totalEquity > 0 ? totalEquity : summedUsd,
+        exchange: 'bybit'
+      };
     },
 
     async getMarkets(config) {
@@ -206,19 +290,25 @@ const exchanges = {
         if (response.data.code === '0') {
           const account = response.data.data?.[0] || {};
           const details = account.details || [];
-          const totalEq = parseFloat(account.totalEq || '0');
-          const balanceItems = details.map(d => ({
-            coin: d.ccy,
-            walletBalance: parseFloat(d.eq || '0'),
-            usdValue: parseFloat(d.eqUsd || d.eq || '0'),
-            free: parseFloat(d.availBal || d.cashBal || '0'),
-            locked: parseFloat(d.frozenBal || '0'),
-            unrealisedPnl: parseFloat(d.upl || '0')
-          })).filter(b => b.walletBalance > 0);
+          const totalEq = toNumber(account.totalEq, 0);
+          const balanceItems = details.map(d => {
+            const coin = normalizeAsset(d.ccy);
+            const walletBalance = toNumber(d.eq || d.cashBal, 0);
+            return {
+              coin,
+              walletBalance,
+              usdValue: resolveUsdValue(coin, walletBalance, d.eqUsd),
+              free: toNumber(d.availBal || d.availEq || d.cashBal, 0),
+              locked: toNumber(d.frozenBal || d.ordFrozen, 0),
+              unrealisedPnl: toNumber(d.upl, 0)
+            };
+          }).filter(b => b.walletBalance > 0 || b.usdValue > 0)
+            .sort((a, b) => b.usdValue - a.usdValue);
+          const summedUsd = balanceItems.reduce((sum, b) => sum + toNumber(b.usdValue, 0), 0);
           return {
             success: true,
             balance: balanceItems,
-            totalEquity: totalEq,
+            totalEquity: totalEq > 0 ? totalEq : summedUsd,
             exchange: 'okx'
           };
         }
@@ -347,50 +437,35 @@ const exchanges = {
             'Content-Type': 'application/json'
           }
         });
-        const rawBalances = response.data.balances?.filter(b => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0) || [];
+        const rawBalances = response.data.balances?.filter(b => toNumber(b.free, 0) > 0 || toNumber(b.locked, 0) > 0) || [];
         
-        // Try to get prices for USD conversion
+        // Puxa preços públicos para converter todos os ativos suportados para USD/USDT.
         let priceMap = {};
         try {
           const priceRes = await axios.get(`${base}/api/v3/ticker/price`);
           if (Array.isArray(priceRes.data)) {
-            priceRes.data.forEach(t => { priceMap[t.symbol] = parseFloat(t.price); });
+            priceRes.data.forEach(t => {
+              const price = toNumber(t.price, 0);
+              if (t.symbol && price > 0) priceMap[t.symbol] = price;
+            });
           }
-        } catch (e) { /* ignore price fetch errors */ }
+        } catch (e) { /* se falhar, stablecoins ainda serão calculadas corretamente */ }
         
         const balanceItems = rawBalances.map(b => {
-          const asset = b.asset;
-          const free = parseFloat(b.free || '0');
-          const locked = parseFloat(b.locked || '0');
+          const asset = normalizeAsset(b.asset);
+          const free = toNumber(b.free, 0);
+          const locked = toNumber(b.locked, 0);
           const total = free + locked;
-          let usdValue = 0;
-          if (asset === 'USDT' || asset === 'BUSD' || asset === 'USDC' || asset === 'TUSD' || asset === 'DAI') {
-            usdValue = total;
-          } else if (priceMap[`${asset}USDT`]) {
-            usdValue = total * priceMap[`${asset}USDT`];
-          } else if (priceMap[`${asset}BUSD`]) {
-            usdValue = total * priceMap[`${asset}BUSD`];
-          } else if (priceMap[`${asset}USDC`]) {
-            usdValue = total * priceMap[`${asset}USDC`];
-          } else if (asset === 'BTC' && priceMap['BTCUSDT']) {
-            usdValue = total * priceMap['BTCUSDT'];
-          } else if (asset === 'ETH' && priceMap['ETHUSDT']) {
-            usdValue = total * priceMap['ETHUSDT'];
-          } else if (asset === 'BNB' && priceMap['BNBUSDT']) {
-            usdValue = total * priceMap['BNBUSDT'];
-          } else if (asset === 'SOL' && priceMap['SOLUSDT']) {
-            usdValue = total * priceMap['SOLUSDT'];
-          }
           return {
             coin: asset,
             walletBalance: total,
-            usdValue: usdValue,
+            usdValue: resolveUsdValue(asset, total, undefined, priceMap),
             free: free,
             locked: locked
           };
-        });
+        }).sort((a, b) => b.usdValue - a.usdValue);
         
-        const totalEquity = balanceItems.reduce((sum, b) => sum + b.usdValue, 0);
+        const totalEquity = balanceItems.reduce((sum, b) => sum + toNumber(b.usdValue, 0), 0);
         return {
           success: true,
           balance: balanceItems,

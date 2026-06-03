@@ -151,49 +151,59 @@ function updateExchangeStatus(exchange, connected) {
   }
 }
 
+function toFiniteNumber(value, fallback = 0) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : fallback;
+}
+
+function formatUsd(value) {
+  return `$${toFiniteNumber(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function normalizeBalanceItem(coin) {
+  const coinName = (coin.coin || coin.asset || '???').toString().toUpperCase();
+  const walletBalance = toFiniteNumber(
+    coin.walletBalance ?? coin.total ?? (toFiniteNumber(coin.free, 0) + toFiniteNumber(coin.locked, 0)),
+    0
+  );
+  const free = toFiniteNumber(coin.free ?? coin.available ?? coin.availableBalance, 0);
+  const locked = toFiniteNumber(coin.locked ?? coin.frozen ?? 0, 0);
+  let usdValue = toFiniteNumber(coin.usdValue ?? coin.usd ?? coin.eqUsd, 0);
+
+  if (usdValue <= 0 && ['USDT', 'USDC', 'BUSD', 'TUSD', 'USD', 'DAI', 'FDUSD', 'PYUSD'].includes(coinName)) {
+    usdValue = walletBalance;
+  }
+
+  return { ...coin, coin: coinName, walletBalance, free, locked, usdValue };
+}
+
+function calculateTotalBalance(balance, totalEquity) {
+  const equity = toFiniteNumber(totalEquity, 0);
+  if (equity > 0) return equity;
+  return (balance || []).reduce((sum, coin) => sum + toFiniteNumber(coin.usdValue, 0), 0);
+}
+
 async function loadBalance(exchange) {
   const config = state.exchangeConfigs[exchange];
   if (!config) return;
 
   try {
     const result = await window.electronAPI.getBalance(config);
-    if (result.success && result.balance) {
-      // Use totalEquity from exchange if available (Bybit, OKX provide this directly)
-      // Otherwise sum up USD values of each coin
-      let totalUsd = 0;
-
-      if (result.totalEquity && result.totalEquity > 0) {
-        totalUsd = result.totalEquity;
-      } else {
-        // Sum up USD values from each coin
-        result.balance.forEach(coin => {
-          const usdVal = parseFloat(coin.usdValue || 0);
-          if (usdVal > 0) {
-            totalUsd += usdVal;
-          } else {
-            // Fallback: for stablecoins, use walletBalance as USD value
-            const coinName = (coin.coin || coin.asset || '').toUpperCase();
-            const bal = parseFloat(coin.walletBalance || coin.free || 0);
-            if (['USDT', 'USDC', 'BUSD', 'TUSD', 'USD', 'DAI'].includes(coinName) && bal > 0) {
-              totalUsd += bal;
-            }
-          }
-        });
-      }
+    if (result.success && Array.isArray(result.balance)) {
+      const normalizedBalance = result.balance.map(normalizeBalanceItem).filter(coin => coin.walletBalance > 0 || coin.usdValue > 0);
+      const totalUsd = calculateTotalBalance(normalizedBalance, result.totalEquity);
 
       // Save balance to state and cache
       state.totalBalance = totalUsd;
-      state.balanceDetails = result.balance;
+      state.balanceDetails = normalizedBalance;
 
       const balanceEl = document.getElementById('total-balance');
-      if (balanceEl) {
-        balanceEl.textContent = `$${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      }
+      if (balanceEl) balanceEl.textContent = formatUsd(totalUsd);
 
       // Also update balance details in the market card
-      displayBalanceDetails(result.balance, result.exchange || exchange);
+      displayBalanceDetails(normalizedBalance, result.exchange || exchange);
 
-      addLog('info', `Saldo carregado de ${exchange}: $${totalUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      addLog('info', `Saldo carregado de ${exchange}: ${formatUsd(totalUsd)}`);
       saveConfig();
     } else if (result.success && (!result.balance || result.balance.length === 0)) {
       // Only set $0.00 if there's no cached balance
@@ -229,7 +239,7 @@ function displayBalanceDetails(balance, exchange) {
   const container = document.getElementById('market-data-content');
   if (!container || !balance || balance.length === 0) return;
 
-  const sorted = [...balance].sort((a, b) => (b.usdValue || 0) - (a.usdValue || 0));
+  const sorted = balance.map(normalizeBalanceItem).sort((a, b) => toFiniteNumber(b.usdValue, 0) - toFiniteNumber(a.usdValue, 0));
 
   container.innerHTML = `
     <div style="margin-bottom:8px;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">
@@ -237,9 +247,9 @@ function displayBalanceDetails(balance, exchange) {
     </div>
     ${sorted.slice(0, 15).map(coin => {
       const coinName = coin.coin || coin.asset || '???';
-      const amount = parseFloat(coin.walletBalance || coin.free || 0);
-      const usd = parseFloat(coin.usdValue || 0);
-      const free = parseFloat(coin.free || 0);
+      const amount = toFiniteNumber(coin.walletBalance || coin.free, 0);
+      const usd = toFiniteNumber(coin.usdValue, 0);
+      const free = toFiniteNumber(coin.free, 0);
       return `
         <div class="market-item">
           <div>
@@ -247,7 +257,7 @@ function displayBalanceDetails(balance, exchange) {
             <div style="font-size:11px;color:var(--text-muted);">${amount < 0.001 ? amount.toExponential(2) : amount.toLocaleString('en-US', {maximumFractionDigits: 8})} ${coinName}</div>
           </div>
           <div style="text-align:right">
-            <div class="market-price">$${usd.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</div>
+            <div class="market-price">${formatUsd(usd)}</div>
             ${free > 0 && free !== amount ? `<div class="market-change positive" style="font-size:10px">Disponível: ${free.toLocaleString('en-US', {maximumFractionDigits: 6})}</div>` : ''}
           </div>
         </div>
@@ -1248,9 +1258,17 @@ function loadSavedConfig() {
       }
 
       // Restore saved balance
-      if (config.totalBalance) {
-        state.totalBalance = config.totalBalance;
-        document.getElementById('total-balance').textContent = `$${config.totalBalance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      if (config.totalBalance !== undefined && config.totalBalance !== null) {
+        state.totalBalance = toFiniteNumber(config.totalBalance, 0);
+        const balanceEl = document.getElementById('total-balance');
+        if (balanceEl) balanceEl.textContent = formatUsd(state.totalBalance);
+      }
+
+      if (Array.isArray(config.balanceDetails)) {
+        state.balanceDetails = config.balanceDetails.map(normalizeBalanceItem);
+        if (state.balanceDetails.length > 0) {
+          displayBalanceDetails(state.balanceDetails, state.activeExchange || 'cache');
+        }
       }
 
       addLog('info', 'Configurações salvas restauradas');
