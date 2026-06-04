@@ -241,7 +241,7 @@ You MUST respond in JSON format:
   "sentiment": "bullish|bearish|neutral"
 }
 
-Sizing rules: choose the order size yourself based on confidence, risk, volatility and available balance. If trading on Binance, never choose less than 5 USDT per real operation. Use order_usdt for a fixed USDT amount or position_size_percent for percentage. If unsure, use 5-10 USDT for small balances and 1-5% for larger balances.`;
+Sizing rules: choose the order size yourself based on confidence, risk, volatility and available balance. If trading on Binance, never choose less than 5 USDT per real operation. Do not use 100% of the balance; for real trades prefer 5-10 USDT on small balances or 1-5% on larger balances unless the user explicitly asks for more. Only recommend symbols that are active/tradable in the provided market data or monitored pairs. Use order_usdt for a fixed USDT amount or position_size_percent for percentage.`;
 
 
 function getLanguageInstruction(language) {

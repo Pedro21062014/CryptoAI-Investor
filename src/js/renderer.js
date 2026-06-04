@@ -1961,11 +1961,19 @@ function getAIMinOrderUsdt(exchange, paperMode) {
 
 function getAIChosenNotional(analysis, totalBalance, exchange, paperMode) {
   const minUsdt = getAIMinOrderUsdt(exchange, paperMode);
+  const balance = toFiniteNumber(totalBalance, 0);
+  const maxPct = paperMode ? 25 : 10;
+  const maxAllowed = balance > 0 ? Math.max(minUsdt, balance * (maxPct / 100)) : minUsdt;
+  const clamp = (value) => {
+    const v = Math.max(minUsdt, toFiniteNumber(value, minUsdt));
+    return balance > 0 ? Math.min(balance, Math.min(v, maxAllowed)) : v;
+  };
+
   const explicitUsdt = toFiniteNumber(analysis.order_usdt ?? analysis.orderUsd ?? analysis.position_usdt ?? analysis.size_usdt, 0);
-  if (explicitUsdt > 0) return Math.min(totalBalance || explicitUsdt, Math.max(minUsdt, explicitUsdt));
+  if (explicitUsdt > 0) return clamp(explicitUsdt);
 
   const explicitPct = toFiniteNumber(analysis.position_size_percent ?? analysis.order_percent ?? analysis.percent ?? analysis.size_percent, 0);
-  if (explicitPct > 0 && totalBalance > 0) return Math.max(minUsdt, totalBalance * (Math.min(25, explicitPct) / 100));
+  if (explicitPct > 0 && balance > 0) return clamp(balance * (Math.min(maxPct, explicitPct) / 100));
 
   // Se a IA não informou tamanho, o app deriva automaticamente pelo sinal.
   const confidence = toFiniteNumber(analysis.confidence, 50);
@@ -1977,8 +1985,22 @@ function getAIChosenNotional(analysis, totalBalance, exchange, paperMode) {
   else pct = 1;
   if (risk === 'HIGH') pct *= 0.5;
   if (risk === 'EXTREME') pct *= 0.25;
-  if (!totalBalance || totalBalance <= 0) return minUsdt;
-  return Math.min(totalBalance, Math.max(minUsdt, totalBalance * (pct / 100)));
+  return balance > 0 ? clamp(balance * (pct / 100)) : minUsdt;
+}
+
+async function validateSymbolForExecution(exchange, symbol) {
+  try {
+    if (!exchange || !state.exchangeConfigs[exchange] || !window.electronAPI?.getSymbolRules) return { ok: true };
+    const result = await window.electronAPI.getSymbolRules(state.exchangeConfigs[exchange], symbol);
+    if (!result.success) return { ok: false, reason: result.error || `Par ${symbol} não disponível` };
+    const status = String(result.status || '').toUpperCase();
+    if (exchange === 'binance' && status && status !== 'TRADING') return { ok: false, reason: `Binance: par ${symbol} não está ativo (${result.status})` };
+    if (exchange === 'bybit' && status && !['TRADING'].includes(status)) return { ok: false, reason: `Bybit: par ${symbol} não está ativo (${result.status})` };
+    if (exchange === 'okx' && status && !['LIVE'].includes(status)) return { ok: false, reason: `OKX: par ${symbol} não está ativo (${result.status})` };
+    return { ok: true, rules: result };
+  } catch (e) {
+    return { ok: false, reason: e.message };
+  }
 }
 
 async function executeAITrade(analysis) {
@@ -2005,6 +2027,14 @@ async function executeAITrade(analysis) {
   if (['HIGH', 'EXTREME'].includes(analysis.risk_level) && state.riskConfig.maxRiskLevel !== 'HIGH' && state.riskConfig.maxRiskLevel !== 'EXTREME') {
     updateAutoTradeChecklist(analysis);
     addLog('warning', `[AUTO-TRADE] Bloqueado por risco ${analysis.risk_level}`);
+    return;
+  }
+
+  const symbolCheck = await validateSymbolForExecution(exchange, symbol);
+  if (!symbolCheck.ok) {
+    updateAutoTradeChecklist({ ...analysis, execution: { ...(analysis.execution || {}), shouldExecute: false, reason: symbolCheck.reason } });
+    addLog('warning', `[AUTO-TRADE] Bloqueado: ${symbolCheck.reason}`);
+    showToast(`Auto-trade bloqueado: ${symbolCheck.reason}`, 'warning');
     return;
   }
 

@@ -595,7 +595,8 @@ const exchanges = {
         marketMinQty: Number(marketLot.minQty || lot.minQty || 0),
         marketMaxQty: Number(marketLot.maxQty || lot.maxQty || 0),
         tickSize: Number(price.tickSize) > 0 ? price.tickSize : '0.00000001',
-        minNotional: Number(minNotional.minNotional || minNotional.notional || 0)
+        minNotional: Number(minNotional.minNotional || minNotional.notional || 0),
+        status: info.status || ''
       };
       this._rulesCache.set(cacheKey, { ts: Date.now(), rules });
       return rules;
