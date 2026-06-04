@@ -58,10 +58,6 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4c0 1.95-1.4 3.58-3.25 3.93V12h2.75a3.5 3.5 0 0 1 3.5 3.5v1.75c1.85.35 3.25 1.98 3.25 3.93a4 4 0 1 1-7-2.64V15.5a.5.5 0 0 0-.5-.5h-5.5a.5.5 0 0 0-.5.5v3.04a4 4 0 1 1-2 0V15.5a3.5 3.5 0 0 1 3.5-3.5h2.75V9.93A4.002 4.002 0 0 1 12 2z"/></svg>
         <span>IA Config</span>
       </a>
-      <a href="#" class="nav-item" data-page="bot">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="9" cy="16" r="1.5" fill="currentColor"/><circle cx="15" cy="16" r="1.5" fill="currentColor"/><path d="M12 2L12 8"/><path d="M8 6L12 2L16 6"/><line x1="6" y1="11" x2="6" y2="8"/><line x1="18" y1="11" x2="18" y2="8"/></svg>
-        <span>Bot <span class="beta-badge">BETA</span></span>
-      </a>
       <a href="#" class="nav-item" data-page="trading">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         <span>Trading</span>
@@ -111,9 +107,13 @@
             <div class="theme-toggle-switch" id="theme-switch"></div>
             <span class="theme-toggle-icon" id="theme-icon-light">&#9728;</span>
           </div>
+          <button class="btn btn-outline" onclick="openCreateBotModal()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="9" cy="16" r="1.5" fill="currentColor"/><circle cx="15" cy="16" r="1.5" fill="currentColor"/><path d="M12 2L12 8"/></svg>
+            Criar Bot
+          </button>
           <button class="btn btn-primary" id="btn-start-bot" onclick="toggleBot()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Iniciar Bot
+            Iniciar IA
           </button>
         </div>
       </div>
@@ -1736,6 +1736,53 @@
         <button class="btn btn-sm btn-outline" onclick="loadCoinSelectorData(true)">Atualizar preços</button>
       </div>
       <div id="trade-coin-grid" style="padding:16px 20px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;"></div>
+    </div>
+  </div>
+
+  <!-- Create Bot Modal -->
+  <div id="create-bot-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);z-index:3200;align-items:center;justify-content:center;padding:24px;">
+    <div style="width:min(980px,96vw);max-height:90vh;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:18px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+          <h2 style="margin:0;font-size:22px;color:#050505;-webkit-text-fill-color:#050505;">Criar Bot</h2>
+          <p style="margin:4px 0 0;color:var(--text-muted);font-size:12px;">Configure um bot simples, IA ou Bot + IA. Você pode deixar a IA escolher as melhores opções.</p>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="closeCreateBotModal()">Fechar</button>
+      </div>
+      <div style="padding:18px 20px;overflow-y:auto;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px;">
+          <div class="bot-mode-card active" id="create-mode-bot" onclick="selectCreateBotMode('bot')"><div class="bot-mode-icon bot-mode-icon-solo"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="9" cy="16" r="1.5" fill="currentColor"/><circle cx="15" cy="16" r="1.5" fill="currentColor"/></svg></div><h3>Bot</h3><p>Sinais técnicos com indicadores.</p></div>
+          <div class="bot-mode-card" id="create-mode-ai" onclick="selectCreateBotMode('ai')"><div class="bot-mode-icon bot-mode-icon-ai"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4c0 2-1.4 3.6-3.25 3.93V12h2.75a3.5 3.5 0 0 1 3.5 3.5"/></svg></div><h3>IA</h3><p>Decisão guiada pela IA configurada.</p></div>
+          <div class="bot-mode-card" id="create-mode-hybrid" onclick="selectCreateBotMode('hybrid')"><div class="bot-mode-icon bot-mode-icon-hybrid"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="20" cy="6" r="4" stroke-dasharray="2 2"/></svg></div><h3>Bot + IA</h3><p>Combina técnico, notícias e IA.</p></div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header"><h3>Configurações rápidas</h3><button class="btn btn-sm btn-outline" onclick="autoChooseBotConfig()">Deixar a IA escolher</button></div>
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-group"><label>Par principal</label><select id="create-bot-symbol"><option value="BTCUSDT">BTC/USDT</option><option value="ETHUSDT">ETH/USDT</option><option value="SOLUSDT">SOL/USDT</option><option value="BNBUSDT">BNB/USDT</option><option value="XRPUSDT">XRP/USDT</option><option value="SUIUSDT">SUI/USDT</option><option value="HYPEUSDT">HYPE/USDT</option><option value="custom">Personalizado</option></select><input id="create-bot-symbol-custom" placeholder="Ex: LINKUSDT" style="display:none;margin-top:8px;"></div>
+              <div class="form-group"><label>Intervalo</label><select id="create-bot-interval"><option value="5">5 Min</option><option value="15">15 Min</option><option value="60" selected>1 Hora</option><option value="240">4 Horas</option><option value="D">1 Dia</option></select></div>
+              <div class="form-group"><label>Ciclo (min)</label><input type="number" id="create-bot-cycle" value="5" min="1" max="60"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label>Confiança mínima (%)</label><input type="number" id="create-bot-confidence" value="72" min="50" max="95"></div>
+              <div class="form-group"><label>Ordem (% saldo)</label><input type="number" id="create-bot-order-percent" value="2" min="0.1" max="10" step="0.1"></div>
+              <div class="form-group"><label>Lista multi-moedas</label><input id="create-bot-symbol-list" value="BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,HYPEUSDT"></div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;">
+              <label class="checkbox-group"><input type="checkbox" id="create-bot-paper" checked> Paper Trading primeiro</label>
+              <label class="checkbox-group"><input type="checkbox" id="create-bot-multi"> Analisar múltiplas moedas</label>
+              <label class="checkbox-group"><input type="checkbox" id="create-bot-news" checked> Analisar notícias sempre</label>
+              <label class="checkbox-group"><input type="checkbox" id="create-bot-news-align" checked> Exigir notícias alinhadas</label>
+              <label class="checkbox-group"><input type="checkbox" id="create-bot-autotrade"> Auto-trade</label>
+            </div>
+          </div>
+        </div>
+        <div id="create-bot-summary" style="padding:12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:rgba(255,255,255,.035);font-size:13px;color:var(--text-secondary);">Modo selecionado: Bot</div>
+      </div>
+      <div style="padding:14px 20px;border-top:1px solid var(--border-color);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+        <button class="btn btn-outline" onclick="saveCreateBotConfig()">Salvar configuração</button>
+        <button class="btn btn-primary" onclick="createAndStartBot()">Criar e iniciar bot</button>
+      </div>
     </div>
   </div>
 

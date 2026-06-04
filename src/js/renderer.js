@@ -55,6 +55,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupUpdateProgressListener();
   initCoinSelector();
   initTradingUI();
+  ['create-bot-symbol','create-bot-interval','create-bot-cycle','create-bot-confidence','create-bot-order-percent','create-bot-symbol-list','create-bot-paper','create-bot-multi','create-bot-news','create-bot-news-align','create-bot-autotrade'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateBotSummary));
   initAIModelLoaders();
   restoreCachedAIModels();
   document.getElementById('app-language')?.addEventListener('change', () => {
@@ -2478,6 +2479,110 @@ function updateAIMetrics(tokenCount) {
   if (badgeEl) {
     badgeEl.textContent = state.botRunning ? 'Ativo' : 'Pausado';
     badgeEl.className = state.botRunning ? 'badge success' : 'badge info';
+  }
+}
+
+
+// ===== Dashboard Create Bot Modal =====
+let createBotMode = 'bot';
+
+function openCreateBotModal() {
+  syncCreateBotModalFromCurrent();
+  const modal = document.getElementById('create-bot-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeCreateBotModal() {
+  const modal = document.getElementById('create-bot-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function selectCreateBotMode(mode) {
+  createBotMode = mode;
+  ['bot', 'ai', 'hybrid'].forEach(m => document.getElementById(`create-mode-${m}`)?.classList.toggle('active', m === mode));
+  updateCreateBotSummary();
+}
+
+function syncCreateBotModalFromCurrent() {
+  selectCreateBotMode(botState?.mode || 'bot');
+  const set = (id, value) => { const el = document.getElementById(id); if (el !== null && el !== undefined) el.value = value; };
+  const setChecked = (id, value) => { const el = document.getElementById(id); if (el) el.checked = !!value; };
+  set('create-bot-symbol', document.getElementById('bot-symbol')?.value || 'BTCUSDT');
+  set('create-bot-symbol-custom', document.getElementById('bot-symbol-custom')?.value || '');
+  set('create-bot-interval', document.getElementById('bot-interval')?.value || '60');
+  set('create-bot-cycle', document.getElementById('bot-cycle-interval')?.value || '5');
+  set('create-bot-confidence', document.getElementById('bot-min-confidence')?.value || '72');
+  set('create-bot-order-percent', document.getElementById('bot-order-percent')?.value || '2');
+  set('create-bot-symbol-list', document.getElementById('bot-symbol-list')?.value || 'BTCUSDT,ETHUSDT,SOLUSDT');
+  setChecked('create-bot-paper', document.getElementById('bot-paper-mode')?.checked !== false);
+  setChecked('create-bot-multi', document.getElementById('bot-multi-symbols')?.checked || false);
+  setChecked('create-bot-news', document.getElementById('bot-news-continuous')?.checked !== false);
+  setChecked('create-bot-news-align', document.getElementById('bot-require-news-alignment')?.checked !== false);
+  setChecked('create-bot-autotrade', document.getElementById('bot-auto-trade')?.checked || false);
+  document.getElementById('create-bot-symbol')?.addEventListener('change', () => {
+    const custom = document.getElementById('create-bot-symbol-custom');
+    if (custom) custom.style.display = document.getElementById('create-bot-symbol')?.value === 'custom' ? 'block' : 'none';
+  }, { once: true });
+  updateCreateBotSummary();
+}
+
+function autoChooseBotConfig() {
+  const hasAI = !!(state.activeAI && state.aiConfigs[state.activeAI]?.apiKey);
+  selectCreateBotMode(hasAI ? 'hybrid' : 'bot');
+  document.getElementById('create-bot-multi').checked = true;
+  document.getElementById('create-bot-news').checked = true;
+  document.getElementById('create-bot-news-align').checked = true;
+  document.getElementById('create-bot-paper').checked = true;
+  document.getElementById('create-bot-confidence').value = hasAI ? 72 : 68;
+  document.getElementById('create-bot-order-percent').value = 2;
+  document.getElementById('create-bot-cycle').value = 5;
+  document.getElementById('create-bot-symbol-list').value = 'BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT,XRPUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,SUIUSDT,HYPEUSDT';
+  showToast('Configuração sugerida aplicada', 'success');
+  updateCreateBotSummary();
+}
+
+function updateCreateBotSummary() {
+  const summary = document.getElementById('create-bot-summary');
+  if (!summary) return;
+  const modeName = { bot: 'Bot', ai: 'IA', hybrid: 'Bot + IA' }[createBotMode] || 'Bot';
+  const paper = document.getElementById('create-bot-paper')?.checked ? 'Paper Trading' : 'Modo Real';
+  const multi = document.getElementById('create-bot-multi')?.checked ? 'multi-moedas' : 'moeda única';
+  const conf = document.getElementById('create-bot-confidence')?.value || 72;
+  summary.innerHTML = `<strong>Resumo:</strong> ${modeName} • ${paper} • ${multi} • confiança mínima ${conf}%`;
+}
+
+function saveCreateBotConfig() {
+  const copy = (from, to) => { const a = document.getElementById(from); const b = document.getElementById(to); if (a && b) b.value = a.value; };
+  const copyChecked = (from, to) => { const a = document.getElementById(from); const b = document.getElementById(to); if (a && b) b.checked = a.checked; };
+  setBotMode(createBotMode, true);
+  copy('create-bot-symbol', 'bot-symbol');
+  copy('create-bot-symbol-custom', 'bot-symbol-custom');
+  copy('create-bot-interval', 'bot-interval');
+  copy('create-bot-cycle', 'bot-cycle-interval');
+  copy('create-bot-confidence', 'bot-min-confidence');
+  copy('create-bot-order-percent', 'bot-order-percent');
+  copy('create-bot-symbol-list', 'bot-symbol-list');
+  copyChecked('create-bot-paper', 'bot-paper-mode');
+  copyChecked('create-bot-multi', 'bot-multi-symbols');
+  copyChecked('create-bot-news', 'bot-news-continuous');
+  copyChecked('create-bot-news-align', 'bot-require-news-alignment');
+  copyChecked('create-bot-autotrade', 'bot-auto-trade');
+  handleBotSymbolChange();
+  botState.installed = true;
+  localStorage.setItem('cryptoai-bot-installed', 'true');
+  updateBotPageState();
+  saveConfig();
+  showToast('Bot criado/configurado com sucesso', 'success');
+  addLog('success', `Bot criado pelo Dashboard: ${createBotMode}`);
+}
+
+async function createAndStartBot() {
+  saveCreateBotConfig();
+  closeCreateBotModal();
+  if (!botState.running) {
+    await startCryptoBot();
+  } else {
+    showToast('Bot já está ativo', 'info');
   }
 }
 
