@@ -57,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initCoinSelector();
   initTradingUI();
   loadGatewayConfig();
+  ['create-ai-paper', 'create-ai-order-percent'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateAISummary));
   ['create-bot-symbol','create-bot-interval','create-bot-cycle','create-bot-confidence','create-bot-order-percent','create-bot-symbol-list','create-bot-paper','create-bot-multi','create-bot-news','create-bot-news-align','create-bot-autotrade'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateBotSummary));
   initAIModelLoaders();
   restoreCachedAIModels();
@@ -2719,6 +2720,10 @@ function dashboardAIButtonClick() {
 }
 
 function openCreateAIModal() {
+  const paperEl = document.getElementById('create-ai-paper');
+  const percentEl = document.getElementById('create-ai-order-percent');
+  if (paperEl) paperEl.checked = document.getElementById('bot-paper-mode')?.checked !== false;
+  if (percentEl) percentEl.value = document.getElementById('bot-order-percent')?.value || '2';
   updateCreateAISummary();
   const modal = document.getElementById('create-ai-modal');
   if (modal) modal.style.display = 'flex';
@@ -2740,6 +2745,10 @@ function updateCreateAISummary() {
   const autoTrade = document.getElementById('auto-trade')?.value || 'disabled';
   const maxTokens = document.getElementById('max-tokens')?.value || '2000';
   const exchange = state.activeExchange || 'Nenhuma corretora';
+  const paperMode = document.getElementById('create-ai-paper')?.checked !== false;
+  const orderPercent = document.getElementById('create-ai-order-percent')?.value || '2';
+  const warning = document.getElementById('create-ai-real-warning');
+  if (warning) warning.style.display = paperMode ? 'none' : 'block';
   const cards = [
     ['IA ativa', provider],
     ['Modelo', model],
@@ -2747,6 +2756,8 @@ function updateCreateAISummary() {
     ['Moedas', pairs],
     ['Intervalo', `${interval} min`],
     ['Auto-trade IA', autoTrade],
+    ['Execução', paperMode ? 'Paper Trading / teste' : 'REAL na corretora'],
+    ['Ordem', `${orderPercent}% do saldo real`],
     ['Max tokens', maxTokens],
     ['Risco máximo', state.riskConfig.maxRiskLevel || 'LOW']
   ];
@@ -2759,7 +2770,21 @@ function updateCreateAISummary() {
 }
 
 async function createAndStartAI() {
+  const paperMode = document.getElementById('create-ai-paper')?.checked !== false;
+  const orderPercent = document.getElementById('create-ai-order-percent')?.value || '2';
+  const hiddenPaper = document.getElementById('bot-paper-mode');
+  const hiddenPercent = document.getElementById('bot-order-percent');
+  if (hiddenPaper) hiddenPaper.checked = paperMode;
+  if (hiddenPercent) hiddenPercent.value = orderPercent;
+
+  const aiAutoTrade = document.getElementById('auto-trade')?.value || 'disabled';
+  if (!paperMode && aiAutoTrade === 'enabled') {
+    const ok = confirm('Você desmarcou Paper Trading e o Auto-trade da IA está ATIVADO. A IA poderá executar ordens REAIS usando seu saldo real. Deseja continuar?');
+    if (!ok) return;
+  }
+
   closeCreateAIModal();
+  saveConfig();
   if (!state.activeExchange) {
     showToast('Conecte uma corretora antes de criar a IA', 'warning');
     navigateTo('exchanges');
@@ -2772,8 +2797,8 @@ async function createAndStartAI() {
   }
   if (state.botRunning) stopBot();
   await startBot();
-  showToast('IA criada e iniciada com as configurações da IA Config', 'success');
-  addLog('success', `IA criada pelo Dashboard usando ${state.activeAI}`);
+  showToast(`IA criada e iniciada (${paperMode ? 'Paper Trading' : 'Modo REAL'})`, 'success');
+  addLog('success', `IA criada pelo Dashboard usando ${state.activeAI} | execução: ${paperMode ? 'paper' : 'real'} | ordem ${orderPercent}% do saldo`);
 }
 
 // ===== Dashboard Create Bot Modal =====

@@ -1793,7 +1793,26 @@
       <div style="padding:18px 20px;overflow-y:auto;">
         <div id="create-ai-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
         <div style="margin-top:14px;padding:12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:rgba(255,255,255,.035);font-size:12px;color:var(--text-muted);line-height:1.5;">
-          Se quiser alterar modelo, moedas, intervalo ou auto-trade, faça isso na aba <strong>IA Config</strong>. Este botão apenas cria/inicia a IA com o que já está configurado lá.
+          Se quiser alterar modelo, moedas, intervalo ou auto-trade, faça isso na aba <strong>IA Config</strong>. Este botão cria/inicia a IA com o que já está configurado lá.
+        </div>
+        <div class="card" style="margin-top:14px;">
+          <div class="card-header"><h3>Execução de ordens da IA</h3><span class="badge warning">Atenção</span></div>
+          <div class="card-body">
+            <div class="form-row">
+              <div class="form-group checkbox-group">
+                <label><input type="checkbox" id="create-ai-paper" checked> Usar Paper Trading para teste</label>
+                <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">Se marcado, a IA simula as ordens. Se desmarcado, e o auto-trade da IA estiver ativo, ela enviará ordens REAIS para a corretora usando seu saldo real.</small>
+              </div>
+              <div class="form-group">
+                <label>Tamanho da ordem (% do saldo real)</label>
+                <input type="number" id="create-ai-order-percent" value="2" min="0.1" max="10" step="0.1">
+                <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">Usado para calcular quantidade com base no saldo real quando a IA executar trade.</small>
+              </div>
+            </div>
+            <div id="create-ai-real-warning" style="display:none;margin-top:10px;padding:10px;border:1px solid rgba(239,68,68,.35);border-radius:var(--radius-sm);background:rgba(239,68,68,.10);color:var(--accent-red);font-size:12px;font-weight:700;">
+              Modo real selecionado: se o auto-trade da IA estiver ativado em IA Config, ordens reais poderão ser executadas na corretora.
+            </div>
+          </div>
         </div>
       </div>
       <div style="padding:14px 20px;border-top:1px solid var(--border-color);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
