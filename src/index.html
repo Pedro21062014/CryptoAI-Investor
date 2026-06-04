@@ -36,21 +36,7 @@
   <div id="sidebar">
     <div class="sidebar-logo">
       <div class="logo-icon">
-        <svg viewBox="0 0 64 64" width="40" height="40">
-          <defs>
-            <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" style="stop-color:#00d4ff"/>
-              <stop offset="100%" style="stop-color:#7b2ff7"/>
-            </linearGradient>
-          </defs>
-          <polygon points="32,4 58,20 58,44 32,60 6,44 6,20" fill="none" stroke="url(#logoGrad)" stroke-width="2.5"/>
-          <polygon points="32,12 50,23 50,41 32,52 14,41 14,23" fill="url(#logoGrad)" opacity="0.15"/>
-          <path d="M22,28 L32,18 L42,28 L36,28 L36,42 L28,42 L28,28 Z" fill="url(#logoGrad)"/>
-          <circle cx="32" cy="14" r="2.5" fill="#00d4ff"/>
-          <circle cx="52" cy="24" r="2" fill="#7b2ff7"/>
-          <circle cx="12" cy="24" r="2" fill="#00d4ff"/>
-          <line x1="32" y1="14" x2="32" y2="18" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
-        </svg>
+        <img src="assets/logos/app-logo.svg" alt="CryptoAI" width="40" height="40">
       </div>
       <span class="logo-text">CryptoAI</span>
     </div>
@@ -1296,9 +1282,30 @@
                     </select>
                   </div>
                   <div class="form-group">
-                    <label>Par</label>
-                    <input type="text" id="trade-symbol" placeholder="BTCUSDT" value="BTCUSDT">
+                    <label>Moeda</label>
+                    <select id="trade-symbol-select" onchange="handleTradeCoinSelect()">
+                      <option value="BTCUSDT">Bitcoin (BTC/USDT)</option>
+                      <option value="ETHUSDT">Ethereum (ETH/USDT)</option>
+                      <option value="BNBUSDT">BNB (BNB/USDT)</option>
+                      <option value="SOLUSDT">Solana (SOL/USDT)</option>
+                      <option value="XRPUSDT">XRP (XRP/USDT)</option>
+                      <option value="ADAUSDT">Cardano (ADA/USDT)</option>
+                      <option value="DOGEUSDT">Dogecoin (DOGE/USDT)</option>
+                      <option value="AVAXUSDT">Avalanche (AVAX/USDT)</option>
+                      <option value="LINKUSDT">Chainlink (LINK/USDT)</option>
+                      <option value="LTCUSDT">Litecoin (LTC/USDT)</option>
+                      <option value="custom">Personalizado...</option>
+                    </select>
+                    <input type="text" id="trade-symbol" placeholder="BTCUSDT" value="BTCUSDT" style="display:none;margin-top:8px;">
                   </div>
+                </div>
+                <div id="trade-coin-preview" style="display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:rgba(255,255,255,.035);margin-bottom:14px;">
+                  <div id="trade-coin-logo" style="width:42px;height:42px;border-radius:50%;background:var(--gradient-primary);"></div>
+                  <div style="flex:1;">
+                    <div id="trade-coin-name" style="font-size:16px;font-weight:800;color:var(--text-primary);">Bitcoin</div>
+                    <div id="trade-coin-meta" style="font-size:12px;color:var(--text-muted);">BTCUSDT • Preço carregando...</div>
+                  </div>
+                  <button type="button" class="btn btn-sm btn-outline" onclick="openTradeCoinPicker()">Escolher visualmente</button>
                 </div>
                 <div class="form-row">
                   <div class="form-group">
@@ -1320,6 +1327,13 @@
                   <div class="form-group">
                     <label>Quantidade</label>
                     <input type="number" id="trade-quantity" step="0.001" value="0.001">
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+                      <button type="button" class="btn btn-sm btn-outline" onclick="setTradeAmountPercent(1)">1%</button>
+                      <button type="button" class="btn btn-sm btn-outline" onclick="setTradeAmountPercent(2)">2%</button>
+                      <button type="button" class="btn btn-sm btn-outline" onclick="setTradeAmountPercent(5)">5%</button>
+                      <button type="button" class="btn btn-sm btn-outline" onclick="setTradeAmountPercent(10)">10%</button>
+                    </div>
+                    <small id="trade-estimated-value" style="color:var(--text-muted);font-size:11px;margin-top:6px;display:block;">Valor estimado: --</small>
                   </div>
                   <div class="form-group" id="price-group" style="display:none">
                     <label>Preço</label>
@@ -1707,6 +1721,21 @@
       <div id="coin-selector-grid" style="padding:16px 20px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
         <div class="empty-state"><p>Carregando moedas...</p></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Trade Coin Picker Modal -->
+  <div id="trade-coin-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:3100;align-items:center;justify-content:center;padding:24px;">
+    <div style="width:min(860px,96vw);max-height:82vh;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:18px 20px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;gap:12px;align-items:center;">
+        <div><h2 style="margin:0;font-size:20px;">Escolher moeda para trading</h2><p style="margin:4px 0 0;color:var(--text-muted);font-size:12px;">Selecione pelo logo, preço e variação 24h.</p></div>
+        <button class="btn btn-sm btn-outline" onclick="closeTradeCoinPicker()">Fechar</button>
+      </div>
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border-color);display:flex;gap:10px;align-items:center;">
+        <input id="trade-coin-search" placeholder="Buscar moeda..." oninput="renderTradeCoinPicker()" style="flex:1;">
+        <button class="btn btn-sm btn-outline" onclick="loadCoinSelectorData(true)">Atualizar preços</button>
+      </div>
+      <div id="trade-coin-grid" style="padding:16px 20px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;"></div>
     </div>
   </div>
 

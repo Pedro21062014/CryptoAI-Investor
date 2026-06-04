@@ -54,6 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSecureCredentials();
   setupUpdateProgressListener();
   initCoinSelector();
+  initTradingUI();
   initAIModelLoaders();
   restoreCachedAIModels();
   document.getElementById('app-language')?.addEventListener('change', () => {
@@ -500,11 +501,15 @@ async function loadCoinSelectorData(force) {
     localStorage.setItem('cryptoai-coin-selector-cache', JSON.stringify({ ts: Date.now(), coins: state.coinSelectorData }));
     updateSelectedCoinsPreview();
     renderCoinSelector();
+    renderTradeCoinPicker();
+    updateTradeCoinPreview();
     showToast('Moedas/preços atualizados', 'success');
   } catch (e) {
     state.coinSelectorData = state.coinSelectorData.length ? state.coinSelectorData : FALLBACK_COINS;
     updateSelectedCoinsPreview();
     renderCoinSelector();
+    renderTradeCoinPicker();
+    updateTradeCoinPreview();
     if (force) showToast('Falha ao atualizar moedas: ' + e.message, 'warning');
   }
 }
@@ -1659,6 +1664,131 @@ function updateAutoTradeChecklist(analysis = {}, order = null, result = null) {
   return checklist;
 }
 
+
+// ===== Simplified Trading UI =====
+function initTradingUI() {
+  handleTradeCoinSelect();
+  document.getElementById('trade-quantity')?.addEventListener('input', updateTradeEstimatedValue);
+  document.getElementById('trade-price')?.addEventListener('input', updateTradeEstimatedValue);
+  document.getElementById('trade-type')?.addEventListener('change', updateTradeEstimatedValue);
+}
+
+function getTradeSymbol() {
+  const select = document.getElementById('trade-symbol-select');
+  if (select?.value === 'custom') return (document.getElementById('trade-symbol')?.value || 'BTCUSDT').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return (select?.value || document.getElementById('trade-symbol')?.value || 'BTCUSDT').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function handleTradeCoinSelect() {
+  const select = document.getElementById('trade-symbol-select');
+  const input = document.getElementById('trade-symbol');
+  if (!select || !input) return;
+  if (select.value === 'custom') {
+    input.style.display = 'block';
+    input.focus();
+  } else {
+    input.style.display = 'none';
+    input.value = select.value;
+  }
+  updateTradeCoinPreview();
+}
+
+function updateTradeCoinPreview() {
+  const symbol = getTradeSymbol();
+  const base = symbol.replace(/USDT$/, '');
+  const coin = getCoinByPair(symbol);
+  const logo = document.getElementById('trade-coin-logo');
+  const name = document.getElementById('trade-coin-name');
+  const meta = document.getElementById('trade-coin-meta');
+  if (logo) {
+    logo.innerHTML = coin?.image ? `<img src="${coin.image}" style="width:42px;height:42px;border-radius:50%;">` : '';
+    logo.style.background = coin?.image ? 'transparent' : 'var(--gradient-primary)';
+  }
+  if (name) name.textContent = coin?.name || base;
+  const price = coin?.current_price ? `$${Number(coin.current_price).toLocaleString('en-US', { maximumFractionDigits: 8 })}` : 'Preço --';
+  const change = coin?.price_change_percentage_24h ? `${Number(coin.price_change_percentage_24h).toFixed(2)}% 24h` : '';
+  if (meta) meta.textContent = `${symbol} • ${price}${change ? ' • ' + change : ''}`;
+  updateTradeEstimatedValue();
+}
+
+function getTradePriceEstimate() {
+  const type = document.getElementById('trade-type')?.value || 'Market';
+  const limitPrice = toFiniteNumber(document.getElementById('trade-price')?.value, 0);
+  if (type === 'Limit' && limitPrice > 0) return limitPrice;
+  const coin = getCoinByPair(getTradeSymbol());
+  return toFiniteNumber(coin?.current_price, 0);
+}
+
+function updateTradeEstimatedValue() {
+  const qty = toFiniteNumber(document.getElementById('trade-quantity')?.value, 0);
+  const price = getTradePriceEstimate();
+  const el = document.getElementById('trade-estimated-value');
+  if (el) el.textContent = price > 0 && qty > 0 ? `Valor estimado: ${formatUsd(qty * price)} (${qty} ${getTradeSymbol().replace(/USDT$/, '')})` : 'Valor estimado: --';
+}
+
+function setTradeAmountPercent(percent) {
+  const price = getTradePriceEstimate();
+  if (!price) {
+    showToast('Preço da moeda ainda não carregado', 'warning');
+    return;
+  }
+  const notional = toFiniteNumber(state.totalBalance, 0) * (percent / 100);
+  if (notional <= 0) {
+    showToast('Saldo real não carregado', 'warning');
+    return;
+  }
+  let qty = notional / price;
+  const symbol = getTradeSymbol();
+  if (symbol.includes('SHIB') || symbol.includes('PEPE') || symbol.includes('BONK') || symbol.includes('FLOKI')) qty = Math.floor(qty);
+  else if (symbol.includes('BTC')) qty = Number(qty.toFixed(6));
+  else if (symbol.includes('ETH') || symbol.includes('BNB')) qty = Number(qty.toFixed(5));
+  else qty = Number(qty.toFixed(3));
+  document.getElementById('trade-quantity').value = qty;
+  updateTradeEstimatedValue();
+}
+
+function openTradeCoinPicker() {
+  const modal = document.getElementById('trade-coin-modal');
+  if (modal) modal.style.display = 'flex';
+  renderTradeCoinPicker();
+  if (!state.coinSelectorData.length) loadCoinSelectorData(true);
+}
+
+function closeTradeCoinPicker() {
+  const modal = document.getElementById('trade-coin-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function selectTradeCoin(pair) {
+  const select = document.getElementById('trade-symbol-select');
+  const input = document.getElementById('trade-symbol');
+  if (select && [...select.options].some(o => o.value === pair)) select.value = pair;
+  else if (select) select.value = 'custom';
+  if (input) input.value = pair;
+  handleTradeCoinSelect();
+  closeTradeCoinPicker();
+}
+
+function renderTradeCoinPicker() {
+  const grid = document.getElementById('trade-coin-grid');
+  if (!grid) return;
+  const q = (document.getElementById('trade-coin-search')?.value || '').toLowerCase().trim();
+  const coins = (state.coinSelectorData.length ? state.coinSelectorData : FALLBACK_COINS).filter(c => {
+    const pair = coinToPair(c);
+    return !q || c.name?.toLowerCase().includes(q) || c.symbol?.toLowerCase().includes(q) || pair.toLowerCase().includes(q);
+  });
+  grid.innerHTML = coins.map(coin => {
+    const pair = coinToPair(coin);
+    const price = coin.current_price ? `$${Number(coin.current_price).toLocaleString('en-US', { maximumFractionDigits: 8 })}` : 'Preço --';
+    const change = Number(coin.price_change_percentage_24h || 0);
+    return `<div onclick="selectTradeCoin('${pair}')" style="cursor:pointer;padding:12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:rgba(255,255,255,.03);display:flex;gap:10px;align-items:center;">
+      ${coin.image ? `<img src="${coin.image}" style="width:34px;height:34px;border-radius:50%;">` : '<div style="width:34px;height:34px;border-radius:50%;background:var(--gradient-primary);"></div>'}
+      <div style="flex:1;min-width:0;"><div style="font-weight:800;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${coin.name || pair}</div><div style="font-size:11px;color:var(--text-muted);">${pair} • ${price}</div></div>
+      <div style="color:${change >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'};font-size:12px;font-weight:700;">${change ? (change >= 0 ? '+' : '') + change.toFixed(2) + '%' : '--'}</div>
+    </div>`;
+  }).join('') || '<div class="empty-state"><p>Nenhuma moeda encontrada</p></div>';
+}
+
 // ===== Trading =====
 let currentTradeSide = 'BUY';
 
@@ -1680,7 +1810,7 @@ async function executeTrade() {
   }
 
   const order = {
-    symbol: document.getElementById('trade-symbol')?.value || 'BTCUSDT',
+    symbol: getTradeSymbol(),
     side: currentTradeSide,
     type: document.getElementById('trade-type')?.value || 'Market',
     quantity: parseFloat(document.getElementById('trade-quantity')?.value || 0),

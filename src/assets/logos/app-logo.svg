@@ -1,40 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#0f1320"/>
-      <stop offset="100%" style="stop-color:#1a2140"/>
+    <linearGradient id="coin" x1="18%" y1="10%" x2="85%" y2="90%">
+      <stop offset="0" stop-color="#fff2a6"/>
+      <stop offset="0.38" stop-color="#f7c948"/>
+      <stop offset="1" stop-color="#b7791f"/>
     </linearGradient>
-    <linearGradient id="hexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#00d4ff"/>
-      <stop offset="100%" style="stop-color:#8b5cf6"/>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#ffdf6e"/>
+      <stop offset="1" stop-color="#8a4b08"/>
     </linearGradient>
-    <linearGradient id="innerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#00d4ff;stop-opacity:0.25"/>
-      <stop offset="100%" style="stop-color:#8b5cf6;stop-opacity:0.25"/>
-    </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity=".35"/>
     </filter>
   </defs>
-  <!-- Background rounded rect -->
-  <rect width="512" height="512" rx="100" fill="url(#bgGrad)"/>
-  <!-- Outer hexagon -->
-  <polygon points="256,60 430,155 430,355 256,450 82,355 82,155" fill="none" stroke="url(#hexGrad)" stroke-width="6" filter="url(#glow)"/>
-  <!-- Inner hexagon fill -->
-  <polygon points="256,100 385,175 385,335 256,410 127,335 127,175" fill="url(#innerGrad)"/>
-  <!-- Arrow up (bullish/crypto symbol) -->
-  <path d="M180,270 L256,180 L332,270 L296,270 L296,370 L216,370 L216,270 Z" fill="url(#hexGrad)" filter="url(#glow)"/>
-  <!-- Network nodes -->
-  <circle cx="256" cy="115" r="12" fill="#00d4ff" filter="url(#glow)"/>
-  <circle cx="395" cy="195" r="9" fill="#8b5cf6" filter="url(#glow)"/>
-  <circle cx="117" cy="195" r="9" fill="#00d4ff" filter="url(#glow)"/>
-  <!-- Connection lines -->
-  <line x1="256" y1="115" x2="256" y2="180" stroke="#00d4ff" stroke-width="2" opacity="0.4"/>
-  <line x1="395" y1="195" x2="332" y2="270" stroke="#8b5cf6" stroke-width="1.5" opacity="0.3"/>
-  <line x1="117" y1="195" x2="180" y2="270" stroke="#00d4ff" stroke-width="1.5" opacity="0.3"/>
-  <!-- Small decorative dots -->
-  <circle cx="256" cy="460" r="4" fill="#8b5cf6" opacity="0.4"/>
-  <circle cx="60" cy="355" r="3" fill="#00d4ff" opacity="0.3"/>
-  <circle cx="452" cy="355" r="3" fill="#8b5cf6" opacity="0.3"/>
+  <rect width="512" height="512" rx="108" fill="#050505"/>
+  <circle cx="256" cy="256" r="184" fill="url(#edge)" filter="url(#shadow)"/>
+  <circle cx="256" cy="256" r="158" fill="url(#coin)"/>
+  <circle cx="256" cy="256" r="124" fill="none" stroke="#6b3d00" stroke-width="10" opacity=".35"/>
+  <path d="M216 145h55c47 0 78 23 78 59 0 24-13 41-34 50 28 9 45 29 45 59 0 39-32 64-83 64h-61V145zm54 89c23 0 37-9 37-26 0-16-14-25-37-25h-13v51h13zm8 104c25 0 39-11 39-30 0-18-14-29-39-29h-21v59h21z" fill="#121212"/>
+  <path d="M236 118v56M284 118v56M236 338v56M284 338v56" stroke="#121212" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="160" cy="170" r="8" fill="#111" opacity=".7"/>
+  <circle cx="356" cy="174" r="8" fill="#111" opacity=".7"/>
+  <circle cx="384" cy="312" r="8" fill="#111" opacity=".7"/>
+  <circle cx="136" cy="312" r="8" fill="#111" opacity=".7"/>
+  <path d="M160 170l58 34M356 174l-52 34M384 312l-60-24M136 312l70-25" stroke="#111" stroke-width="4" opacity=".28"/>
 </svg>

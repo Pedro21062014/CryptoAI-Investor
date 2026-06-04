@@ -136,9 +136,10 @@ input, select, button { font-family: var(--font-primary); }
 
 .titlebar-title {
   font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-weight: 800;
+  color: #050505;
   letter-spacing: 0.5px;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.55), 0 0 10px rgba(247,201,72,0.25);
 }
 
 .titlebar-controls {
@@ -182,13 +183,21 @@ input, select, button { font-family: var(--font-primary); }
   padding: 20px 20px 10px;
 }
 
+.logo-icon img {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  box-shadow: 0 0 18px rgba(247,201,72,0.22);
+}
+
 .logo-text {
   font-size: 20px;
-  font-weight: 800;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-weight: 900;
+  color: #050505;
+  -webkit-text-fill-color: #050505;
+  background: none;
   letter-spacing: -0.5px;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.55), 0 0 14px rgba(247,201,72,0.28);
 }
 
 .sidebar-nav {
@@ -284,10 +293,11 @@ input, select, button { font-family: var(--font-primary); }
 
 .page-header h1 {
   font-size: 28px;
-  font-weight: 800;
-  background: var(--gradient-primary);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  font-weight: 900;
+  color: #050505;
+  -webkit-text-fill-color: #050505;
+  background: none;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.55), 0 0 14px rgba(247,201,72,0.20);
 }
 
 /* ===== AI Active Badge ===== */
@@ -1352,16 +1362,12 @@ input, select, button { font-family: var(--font-primary); }
 }
 
 /* ===== Logo adjustments for light theme ===== */
-[data-theme="light"] .logo-text {
-  background: linear-gradient(135deg, #00b4d8, #7b2ff7);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
+[data-theme="light"] .logo-text,
 [data-theme="light"] .page-header h1 {
-  background: linear-gradient(135deg, #00b4d8, #7b2ff7);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: #050505;
+  -webkit-text-fill-color: #050505;
+  background: none;
+  text-shadow: none;
 }
 
 /* ===== Analysis Symbol Tag ===== */
