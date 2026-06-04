@@ -332,6 +332,74 @@ function setAutoStart(enabled) {
   });
 }
 
+function escapeTelegramHtml(text) {
+  return String(text || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function detectGatewayCategory(text) {
+  const lower = String(text || '').toLowerCase();
+  if (lower.includes('auto-trade') || lower.includes('trade') || lower.includes('ordem') || lower.includes('buy') || lower.includes('sell')) return 'trade';
+  if (lower.includes('erro') || lower.includes('falha') || lower.includes('bloqueado') || lower.includes('exception')) return 'error';
+  if (lower.includes('saldo')) return 'balance';
+  if (lower.includes('análise') || lower.includes('analise') || lower.includes('ia')) return 'ai';
+  if (lower.includes('risco')) return 'risk';
+  if (lower.includes('atualiza')) return 'update';
+  if (lower.includes('aprend')) return 'learning';
+  return 'info';
+}
+
+function formatTelegramMessage(text) {
+  const raw = String(text || '');
+  const category = detectGatewayCategory(raw);
+  const map = {
+    trade: { emoji: '🚀', title: 'Trade / Auto-Trade' },
+    error: { emoji: '❌', title: 'Erro ou Bloqueio' },
+    balance: { emoji: '💼', title: 'Saldo Atualizado' },
+    ai: { emoji: '🧠', title: 'Inteligência Artificial' },
+    risk: { emoji: '🛡️', title: 'Alerta de Risco' },
+    update: { emoji: '🔄', title: 'Atualização' },
+    learning: { emoji: '📚', title: 'Aprendizado da IA' },
+    info: { emoji: 'ℹ️', title: 'Notificação' }
+  };
+  const meta = map[category] || map.info;
+  const now = new Date().toLocaleString('pt-BR');
+
+  const symbol = raw.match(/\b([A-Z0-9]{2,15}USDT)\b/)?.[1];
+  const side = raw.match(/\b(BUY|SELL|HOLD)\b/i)?.[1]?.toUpperCase();
+  const money = raw.match(/\$\s?([0-9]+(?:[.,][0-9]+)?)/)?.[0];
+  const confidence = raw.match(/conf(?:iança)?\s*([0-9]+)%/i)?.[1] || raw.match(/([0-9]+)%/)?.[1];
+
+  const lines = [
+    `${meta.emoji} <b>CryptoAI Investor</b>`,
+    `<b>${meta.title}</b>`,
+    '',
+    `📝 <b>Mensagem:</b> ${escapeTelegramHtml(raw)}`
+  ];
+  if (symbol) lines.push(`🪙 <b>Moeda:</b> <code>${escapeTelegramHtml(symbol)}</code>`);
+  if (side) lines.push(`📈 <b>Ação:</b> <code>${escapeTelegramHtml(side)}</code>`);
+  if (money) lines.push(`💰 <b>Valor:</b> ${escapeTelegramHtml(money)}`);
+  if (confidence) lines.push(`🎯 <b>Confiança:</b> ${escapeTelegramHtml(confidence)}%`);
+  lines.push(`⏰ <b>Horário:</b> ${escapeTelegramHtml(now)}`);
+  lines.push('');
+  lines.push('🤖 <i>Enviado automaticamente pelo CryptoAI.</i>');
+
+  return {
+    text: lines.join('\n'),
+    category,
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '📊 Dashboard', callback_data: 'open_dashboard' },
+          { text: '⚙️ Configurações', callback_data: 'open_settings' }
+        ]
+      ]
+    }
+  };
+}
+
 
 async function sendGatewayMessage(channelId, channelConfig, text) {
   const id = String(channelId || '').toLowerCase();
@@ -342,10 +410,13 @@ async function sendGatewayMessage(channelId, channelConfig, text) {
       if (!cfg.botToken || !cfg.chatId) {
         return { success: false, error: 'Telegram precisa de Bot Token e Chat ID' };
       }
+      const formatted = formatTelegramMessage(message);
       const response = await axios.post(`https://api.telegram.org/bot${cfg.botToken}/sendMessage`, {
         chat_id: cfg.chatId,
-        text: message,
-        disable_web_page_preview: true
+        text: formatted.text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup: formatted.reply_markup
       }, { timeout: 30000 });
       if (response.data?.ok === false) return { success: false, error: response.data.description || 'Telegram retornou erro' };
       return { success: true, data: response.data };
