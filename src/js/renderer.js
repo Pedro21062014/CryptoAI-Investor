@@ -1318,11 +1318,16 @@ async function executeAITrade(analysis) {
     symbol: symbol,
     side: side,
     type: 'Market',
-    quantity: quantity,
-    price: price || undefined,
-    stopLoss: analysis.stop_loss || undefined,
-    takeProfit: analysis.target_price || undefined
+    quantity: quantity
   };
+
+  // Binance MARKET rejeita parâmetros extras. Stop/take/price ficam apenas para validação/log,
+  // não são enviados na ordem market.
+  if (exchange !== 'binance') {
+    order.price = price || undefined;
+    order.stopLoss = analysis.stop_loss || undefined;
+    order.takeProfit = analysis.target_price || undefined;
+  }
 
   try {
     const validation = await window.electronAPI.validateTrade(

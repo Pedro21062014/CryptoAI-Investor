@@ -598,34 +598,48 @@ const exchanges = {
         const base = this.getUrl(config);
         const timestamp = Date.now();
         const orderType = String(order.type || 'MARKET').toUpperCase();
+        const symbol = String(order.symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+        const side = String(order.side || '').toUpperCase();
+        const quantity = Number(order.quantity);
+
+        if (!symbol) return { success: false, error: 'Binance: symbol ausente' };
+        if (!['BUY', 'SELL'].includes(side)) return { success: false, error: 'Binance: side invalido' };
+        if (!Number.isFinite(quantity) || quantity <= 0) return { success: false, error: 'Binance: quantity invalida' };
+
+        // Lista branca por tipo de ordem. Isso impede definitivamente o erro
+        // "Not all sent parameters were read" causado por parâmetros extras
+        // como price/timeInForce/stopLoss/takeProfit em ordem MARKET.
         const params = {
-          symbol: String(order.symbol || '').toUpperCase(),
-          side: String(order.side || '').toUpperCase(),
+          symbol,
+          side,
           type: orderType,
-          quantity: order.quantity,
-          timestamp: timestamp
+          quantity: quantity.toString(),
+          timestamp: timestamp.toString()
         };
 
-        // Binance SPOT não aceita price/timeInForce em ordem MARKET.
-        // Também não enviamos recvWindow no create order para evitar erro
-        // "Not all sent parameters were read" em algumas contas/testnet.
         if (orderType === 'LIMIT') {
-          params.price = order.price;
+          const price = Number(order.price);
+          if (!Number.isFinite(price) || price <= 0) {
+            return { success: false, error: 'Binance: ordem LIMIT precisa de preço valido' };
+          }
+          params.price = price.toString();
           params.timeInForce = order.timeInForce || 'GTC';
-        }
-
-        if (orderType === 'LIMIT' && !params.price) {
-          return { success: false, error: 'Binance: ordem LIMIT precisa de preço' };
+        } else if (orderType !== 'MARKET') {
+          return { success: false, error: `Binance: tipo de ordem nao suportado no app (${orderType})` };
         }
 
         const queryString = this.buildQueryString(params);
         const signature = this.sign(config.apiSecret, queryString);
-        const url = `${base}/api/v3/order?${queryString}&signature=${signature}`;
-        const response = await axios.post(url, {}, {
+        const payload = `${queryString}&signature=${signature}`;
+
+        // Envia os parâmetros no body como x-www-form-urlencoded, sem JSON vazio e
+        // sem query params duplicados. Isso evita parâmetros extras na Binance.
+        const response = await axios.post(`${base}/api/v3/order`, payload, {
           headers: {
             'X-MBX-APIKEY': config.apiKey,
-            'Content-Type': 'application/json'
-          }
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          transformRequest: [(data) => data]
         });
         return { success: true, data: response.data };
       } catch (err) {
