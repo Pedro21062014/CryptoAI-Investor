@@ -2019,26 +2019,43 @@ function requestTradeConfirmation(analysis) {
   }
 }
 
+function normalizeTradeRecord(t) {
+  const time = t.time instanceof Date ? t.time : new Date(t.time || t.timestamp || Date.now());
+  return {
+    ...t,
+    time: Number.isNaN(time.getTime()) ? new Date() : time,
+    symbol: t.symbol || '--',
+    side: t.side || '--',
+    price: t.price ?? 'Market',
+    quantity: t.quantity ?? '--',
+    pnl: t.pnl ?? '--',
+    status: t.status || 'filled'
+  };
+}
+
 function updateTradesTable() {
   const tbody = document.getElementById('trades-tbody');
+  const trades = (state.trades || []).map(normalizeTradeRecord);
+  state.trades = trades;
+
+  const dailyTradesEl = document.getElementById('daily-trades');
+  if (dailyTradesEl) dailyTradesEl.textContent = trades.length;
   if (!tbody) return;
 
-  document.getElementById('daily-trades').textContent = state.trades.length;
-
-  if (state.trades.length === 0) {
+  if (trades.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="empty-row">Nenhum trade realizado</td></tr>';
     return;
   }
 
-  tbody.innerHTML = state.trades.slice(-20).reverse().map(t => `
+  tbody.innerHTML = trades.slice(-50).reverse().map(t => `
     <tr>
-      <td style="font-family:var(--font-mono);font-size:12px">${t.time.toLocaleTimeString()}</td>
+      <td style="font-family:var(--font-mono);font-size:12px">${t.time.toLocaleTimeString('pt-BR')}</td>
       <td><strong>${t.symbol}</strong></td>
-      <td><span class="badge ${t.side === 'BUY' ? 'success' : 'error'}">${t.side}</span></td>
-      <td style="font-family:var(--font-mono)">${t.price}</td>
+      <td><span class="badge ${t.side === 'BUY' ? 'success' : t.side === 'SELL' ? 'error' : 'info'}">${t.side}</span></td>
+      <td style="font-family:var(--font-mono)">${typeof t.price === 'number' ? '$' + t.price.toLocaleString('en-US', { maximumFractionDigits: 8 }) : t.price}</td>
       <td style="font-family:var(--font-mono)">${t.quantity}</td>
-      <td>--</td>
-      <td><span class="badge success">${t.status}</span></td>
+      <td style="font-family:var(--font-mono)">${t.pnl !== '--' ? formatUsd(t.pnl) : '--'}</td>
+      <td><span class="badge ${t.status === 'paper' ? 'info' : 'success'}">${t.status}</span></td>
     </tr>
   `).join('');
 }
@@ -2579,10 +2596,16 @@ function saveCreateBotConfig() {
 async function createAndStartBot() {
   saveCreateBotConfig();
   closeCreateBotModal();
-  if (!botState.running) {
-    await startCryptoBot();
+  if (botState.running) {
+    stopCryptoBot();
+  }
+  const started = await startCryptoBot();
+  if (started) {
+    showToast('Bot criado e iniciado automaticamente', 'success');
+    addLog('success', 'Bot criado no Dashboard e iniciado automaticamente');
   } else {
-    showToast('Bot já está ativo', 'info');
+    showToast('Bot criado, mas não iniciou. Verifique corretora/IA exigida.', 'warning');
+    addLog('warning', 'Bot criado, mas não iniciou por faltar corretora ou IA');
   }
 }
 
@@ -2737,19 +2760,23 @@ async function toggleCryptoBot() {
 async function startCryptoBot() {
   if (!state.activeExchange) {
     showToast('Conecte uma corretora antes de iniciar o Bot', 'warning');
-    return;
+    return false;
   }
 
   if (botState.mode === 'ai' && !state.activeAI) {
     showToast('Configure uma IA antes de usar o modo IA', 'warning');
-    return;
+    return false;
   }
 
   if (botState.mode === 'hybrid' && !state.activeAI) {
     showToast('Configure uma IA para o modo hibrido', 'warning');
-    return;
+    return false;
   }
 
+  if (botState.interval) {
+    clearInterval(botState.interval);
+    botState.interval = null;
+  }
   botState.running = true;
   updateCryptoBotUI();
   showToast('CryptoBot Beta iniciado!', 'success');
@@ -2763,6 +2790,7 @@ async function startCryptoBot() {
   botState.interval = setInterval(() => {
     runCryptoBotCycle();
   }, cycleMinutes * 60 * 1000);
+  return true;
 }
 
 function stopCryptoBot() {
