@@ -603,12 +603,12 @@ const exchanges = {
           side: String(order.side || '').toUpperCase(),
           type: orderType,
           quantity: order.quantity,
-          timestamp: timestamp,
-          recvWindow: 60000
+          timestamp: timestamp
         };
 
         // Binance SPOT não aceita price/timeInForce em ordem MARKET.
-        // Enviar esses parâmetros causava: "Not all sent parameters were read".
+        // Também não enviamos recvWindow no create order para evitar erro
+        // "Not all sent parameters were read" em algumas contas/testnet.
         if (orderType === 'LIMIT') {
           params.price = order.price;
           params.timeInForce = order.timeInForce || 'GTC';
