@@ -35,7 +35,8 @@ const state = {
   automationIntervals: {},
   coinSelectorData: [],
   coinSelectorSelected: new Set(['BTCUSDT', 'ETHUSDT', 'SOLUSDT']),
-  tradeSymbolRules: null
+  tradeSymbolRules: null,
+  aiLearning: { blockedSymbols: {}, events: [] }
 };
 
 // ===== Navigation =====
@@ -2586,15 +2587,25 @@ function loadSavedConfig() {
 
 
 // ===== AI Learning Memory =====
+function ensureAILearning() {
+  if (!state.aiLearning || typeof state.aiLearning !== 'object') state.aiLearning = { blockedSymbols: {}, events: [] };
+  if (!state.aiLearning.blockedSymbols || typeof state.aiLearning.blockedSymbols !== 'object') state.aiLearning.blockedSymbols = {};
+  if (!Array.isArray(state.aiLearning.events)) state.aiLearning.events = [];
+  return state.aiLearning;
+}
+
 function loadAILearning() {
+  ensureAILearning();
   try {
     const saved = localStorage.getItem('cryptoai-ai-learning');
-    if (saved) state.aiLearning = { ...state.aiLearning, ...JSON.parse(saved) };
+    if (saved) state.aiLearning = { ...ensureAILearning(), ...JSON.parse(saved) };
+    ensureAILearning();
   } catch (e) {}
   updateAILearningUI();
 }
 
 function saveAILearning() {
+  ensureAILearning();
   try { localStorage.setItem('cryptoai-ai-learning', JSON.stringify(state.aiLearning)); } catch (e) {}
 }
 
@@ -2603,6 +2614,7 @@ function getLearningKey(exchange, symbol) {
 }
 
 function learnSymbolFailure(exchange, symbol, reason, cooldownHours = 24) {
+  ensureAILearning();
   if (!symbol) return;
   const key = getLearningKey(exchange, symbol);
   const now = Date.now();
@@ -2625,6 +2637,7 @@ function learnSymbolFailure(exchange, symbol, reason, cooldownHours = 24) {
 }
 
 function clearExpiredLearning() {
+  ensureAILearning();
   const now = Date.now();
   Object.keys(state.aiLearning.blockedSymbols || {}).forEach(key => {
     const item = state.aiLearning.blockedSymbols[key];
@@ -2651,6 +2664,7 @@ function getAILearningContext() {
 }
 
 function updateAILearningUI() {
+  ensureAILearning();
   const el = document.getElementById('ai-learning-line');
   if (!el) return;
   clearExpiredLearning();
