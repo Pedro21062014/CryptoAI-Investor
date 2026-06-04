@@ -74,6 +74,10 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><line x1="10" y1="6" x2="18" y2="6"/><line x1="10" y1="10" x2="18" y2="10"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
         <span>Notícias</span>
       </a>
+      <a href="#" class="nav-item" data-page="gateway">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v12H5.17L4 17.17V4z"/><path d="M8 9h8"/><path d="M8 13h5"/></svg>
+        <span>Gateway</span>
+      </a>
       <a href="#" class="nav-item" data-page="risk">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <span>Risco</span>
@@ -1489,6 +1493,42 @@
                 <p>Clique em "Atualizar" para carregar notícias</p>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Gateway Page -->
+    <div class="page" id="page-gateway">
+      <div class="page-header">
+        <h1>Gateway</h1>
+        <div class="header-actions" style="display:flex;gap:10px;align-items:center;">
+          <span class="badge info" id="gateway-enabled-count">0 canais ativos</span>
+          <button class="btn btn-primary" onclick="saveGatewayConfig()">Salvar Canais</button>
+        </div>
+      </div>
+
+      <div class="card card-full">
+        <div class="card-header">
+          <h3>Canais de Notificação</h3>
+          <span class="badge info">Receba trades, análises, erros e alertas</span>
+        </div>
+        <div class="card-body">
+          <p style="color:var(--text-muted);font-size:13px;line-height:1.6;margin-bottom:16px;">Adicione canais para receber todas as informações importantes do app. Configure tokens/webhooks dos serviços que deseja usar.</p>
+          <div id="gateway-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;"></div>
+        </div>
+      </div>
+
+      <div class="card card-full" style="margin-top:16px;">
+        <div class="card-header"><h3>Tipos de informação enviadas</h3></div>
+        <div class="card-body">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+            <label class="checkbox-group"><input type="checkbox" id="gateway-notify-trades" checked> Trades executados</label>
+            <label class="checkbox-group"><input type="checkbox" id="gateway-notify-analysis" checked> Análises da IA/Bot</label>
+            <label class="checkbox-group"><input type="checkbox" id="gateway-notify-errors" checked> Erros e falhas</label>
+            <label class="checkbox-group"><input type="checkbox" id="gateway-notify-balance" checked> Mudanças de saldo</label>
+            <label class="checkbox-group"><input type="checkbox" id="gateway-notify-updates" checked> Atualizações do app</label>
+            <label class="checkbox-group"><input type="checkbox" id="gateway-notify-risk" checked> Alertas de risco</label>
           </div>
         </div>
       </div>

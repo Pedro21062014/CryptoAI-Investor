@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
   setupUpdateProgressListener();
   initCoinSelector();
   initTradingUI();
+  loadGatewayConfig();
   ['create-bot-symbol','create-bot-interval','create-bot-cycle','create-bot-confidence','create-bot-order-percent','create-bot-symbol-list','create-bot-paper','create-bot-multi','create-bot-news','create-bot-news-align','create-bot-autotrade'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateBotSummary));
   initAIModelLoaders();
   restoreCachedAIModels();
@@ -2491,6 +2492,143 @@ function loadSavedConfig() {
   }
 }
 
+
+// ===== Gateway Notifications =====
+const GATEWAY_CHANNELS = [
+  { id: 'telegram', name: 'Telegram', color: '#229ED9', icon: '✈', fields: [{ key: 'botToken', label: 'Bot Token' }, { key: 'chatId', label: 'Chat ID' }] },
+  { id: 'whatsapp', name: 'WhatsApp', color: '#25D366', icon: '☎', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'phone', label: 'Número/Grupo' }] },
+  { id: 'wechat', name: 'WeChat', color: '#07C160', icon: '💬', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'roomId', label: 'Room/User ID' }] },
+  { id: 'qq', name: 'QQ', color: '#12B7F5', icon: '🐧', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'groupId', label: 'Group/User ID' }] },
+  { id: 'discord', name: 'Discord', color: '#5865F2', icon: '☯', fields: [{ key: 'webhookUrl', label: 'Webhook URL' }] },
+  { id: 'email', name: 'E-mail', color: '#EA4335', icon: '✉', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'to', label: 'E-mail destino' }] },
+  { id: 'webhook', name: 'Webhook', color: '#F59E0B', icon: '{}', fields: [{ key: 'webhookUrl', label: 'URL do Webhook' }] }
+];
+
+function gatewayIcon(channel) {
+  return `<div style="width:46px;height:46px;border-radius:14px;background:${channel.color};display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:20px;box-shadow:0 10px 24px ${channel.color}44;">${channel.icon}</div>`;
+}
+
+function getGatewayConfig() {
+  try { return JSON.parse(localStorage.getItem('cryptoai-gateway-config') || '{}'); } catch (e) { return {}; }
+}
+
+function loadGatewayConfig() {
+  renderGatewayChannels();
+  const cfg = getGatewayConfig();
+  const opts = cfg.options || {};
+  ['trades','analysis','errors','balance','updates','risk'].forEach(k => {
+    const el = document.getElementById(`gateway-notify-${k}`);
+    if (el) el.checked = opts[k] !== false;
+  });
+  updateGatewayEnabledCount();
+}
+
+function renderGatewayChannels() {
+  const grid = document.getElementById('gateway-grid');
+  if (!grid) return;
+  const cfg = getGatewayConfig();
+  grid.innerHTML = GATEWAY_CHANNELS.map(ch => {
+    const saved = cfg.channels?.[ch.id] || {};
+    return `<div style="padding:14px;border:1px solid var(--border-color);border-radius:var(--radius-md);background:rgba(255,255,255,.035);">
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px;">
+        ${gatewayIcon(ch)}
+        <div style="flex:1;"><div style="font-size:16px;font-weight:900;color:var(--text-primary);">${ch.name}</div><label style="font-size:12px;color:var(--text-muted);"><input type="checkbox" id="gateway-${ch.id}-enabled" ${saved.enabled ? 'checked' : ''} onchange="updateGatewayEnabledCount()"> Ativar canal</label></div>
+      </div>
+      ${ch.fields.map(f => `<div class="form-group" style="margin-bottom:8px;"><label>${f.label}</label><input id="gateway-${ch.id}-${f.key}" value="${(saved[f.key] || '').toString().replace(/"/g,'&quot;')}" placeholder="${f.label}"></div>`).join('')}
+      <div style="display:flex;gap:8px;margin-top:10px;"><button class="btn btn-sm btn-outline" onclick="testGatewayChannel('${ch.id}')">Testar</button><span class="badge" id="gateway-${ch.id}-status">${saved.enabled ? 'Ativo' : 'Inativo'}</span></div>
+    </div>`;
+  }).join('');
+}
+
+function collectGatewayConfig() {
+  const channels = {};
+  GATEWAY_CHANNELS.forEach(ch => {
+    const data = { enabled: !!document.getElementById(`gateway-${ch.id}-enabled`)?.checked };
+    ch.fields.forEach(f => data[f.key] = document.getElementById(`gateway-${ch.id}-${f.key}`)?.value || '');
+    channels[ch.id] = data;
+  });
+  const options = {
+    trades: document.getElementById('gateway-notify-trades')?.checked !== false,
+    analysis: document.getElementById('gateway-notify-analysis')?.checked !== false,
+    errors: document.getElementById('gateway-notify-errors')?.checked !== false,
+    balance: document.getElementById('gateway-notify-balance')?.checked !== false,
+    updates: document.getElementById('gateway-notify-updates')?.checked !== false,
+    risk: document.getElementById('gateway-notify-risk')?.checked !== false
+  };
+  return { channels, options };
+}
+
+function saveGatewayConfig() {
+  const cfg = collectGatewayConfig();
+  localStorage.setItem('cryptoai-gateway-config', JSON.stringify(cfg));
+  updateGatewayEnabledCount();
+  showToast('Gateway salvo com sucesso', 'success');
+  addLog('success', 'Configuração do Gateway salva');
+}
+
+function updateGatewayEnabledCount() {
+  const count = GATEWAY_CHANNELS.filter(ch => document.getElementById(`gateway-${ch.id}-enabled`)?.checked).length;
+  const badge = document.getElementById('gateway-enabled-count');
+  if (badge) { badge.textContent = `${count} canal${count === 1 ? '' : 's'} ativo${count === 1 ? '' : 's'}`; badge.className = count ? 'badge success' : 'badge'; }
+  GATEWAY_CHANNELS.forEach(ch => {
+    const st = document.getElementById(`gateway-${ch.id}-status`);
+    const enabled = document.getElementById(`gateway-${ch.id}-enabled`)?.checked;
+    if (st) { st.textContent = enabled ? 'Ativo' : 'Inativo'; st.className = enabled ? 'badge success' : 'badge'; }
+  });
+}
+
+async function sendGatewayToChannel(id, text) {
+  const cfg = collectGatewayConfig();
+  const ch = cfg.channels[id];
+  if (!ch?.enabled) return { success: false, error: 'Canal desativado' };
+  if (id === 'telegram') {
+    if (!ch.botToken || !ch.chatId) throw new Error('Telegram precisa de Bot Token e Chat ID');
+    const url = `https://api.telegram.org/bot${ch.botToken}/sendMessage`;
+    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: ch.chatId, text }) });
+    return { success: true };
+  }
+  const url = ch.webhookUrl;
+  if (!url) throw new Error(`${id} precisa de Webhook/API URL`);
+  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, message: text, app: 'CryptoAI Investor', channel: id, target: ch.phone || ch.roomId || ch.groupId || ch.to || '' }) });
+  return { success: true };
+}
+
+async function testGatewayChannel(id) {
+  saveGatewayConfig();
+  const status = document.getElementById(`gateway-${id}-status`);
+  try {
+    await sendGatewayToChannel(id, `✅ Teste do CryptoAI Investor em ${new Date().toLocaleString('pt-BR')}`);
+    if (status) { status.textContent = 'Teste OK'; status.className = 'badge success'; }
+    showToast(`Teste enviado para ${id}`, 'success');
+  } catch (e) {
+    if (status) { status.textContent = 'Erro'; status.className = 'badge error'; }
+    showToast(`Erro no gateway ${id}: ${e.message}`, 'error');
+  }
+}
+
+let lastGatewaySentAt = 0;
+function notifyGatewayFromLog(type, message) {
+  try {
+    const cfg = getGatewayConfig();
+    const opts = cfg.options || {};
+    const lower = String(message || '').toLowerCase();
+    const category = lower.includes('trade') || lower.includes('ordem') ? 'trades'
+      : lower.includes('análise') || lower.includes('analise') || lower.includes('ia') ? 'analysis'
+      : type === 'error' || lower.includes('erro') || lower.includes('falha') ? 'errors'
+      : lower.includes('saldo') ? 'balance'
+      : lower.includes('risco') ? 'risk'
+      : lower.includes('atualiza') ? 'updates'
+      : null;
+    if (!category || opts[category] === false) return;
+    if (Date.now() - lastGatewaySentAt < 2500) return;
+    lastGatewaySentAt = Date.now();
+    const text = `[CryptoAI] ${type.toUpperCase()} • ${message}`;
+    Object.keys(cfg.channels || {}).forEach(id => {
+      if (cfg.channels[id]?.enabled) sendGatewayToChannel(id, text).catch(() => {});
+    });
+  } catch (e) {}
+}
+
 // ===== Utilities =====
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
@@ -2513,6 +2651,7 @@ function addLog(type, message) {
   const time = new Date().toLocaleTimeString('pt-BR');
   entry.innerHTML = `<span class="log-time">${time}</span><span class="log-msg">${message}</span>`;
   log.insertBefore(entry, log.firstChild);
+  notifyGatewayFromLog(type, message);
 
   // Keep max 100 entries
   while (log.children.length > 100) {
