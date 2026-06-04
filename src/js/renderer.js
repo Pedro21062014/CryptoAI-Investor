@@ -87,26 +87,50 @@ function sanitizeAIConfigsForStorage(configs = {}) {
 async function saveSecureCredentials() {
   try {
     if (!window.electronAPI?.setSecureCredentials) return;
-    await window.electronAPI.setSecureCredentials({
-      exchangeConfigs: state.exchangeConfigs,
-      aiConfigs: state.aiConfigs
+
+    const exchangeConfigs = {};
+    Object.keys(state.exchangeConfigs || {}).forEach(ex => {
+      const conf = state.exchangeConfigs[ex] || {};
+      if (conf.apiKey || conf.apiSecret || conf.passphrase) exchangeConfigs[ex] = conf;
     });
+
+    const aiConfigs = {};
+    Object.keys(state.aiConfigs || {}).forEach(provider => {
+      const conf = state.aiConfigs[provider] || {};
+      if (conf.apiKey) aiConfigs[provider] = conf;
+    });
+
+    // Não sobrescreve o arquivo seguro quando o estado ainda tem apenas configs sanitizadas.
+    if (Object.keys(exchangeConfigs).length === 0 && Object.keys(aiConfigs).length === 0) return;
+
+    await window.electronAPI.setSecureCredentials({ exchangeConfigs, aiConfigs });
   } catch (e) {
     addLog('warning', `Nao foi possivel salvar credenciais seguras: ${e.message}`);
   }
 }
 
 async function loadSecureCredentials() {
+  const started = Date.now();
   try {
     if (!window.electronAPI?.getSecureCredentials) return;
+    addLog('info', 'Carregando credenciais seguras...');
     const secure = await window.electronAPI.getSecureCredentials();
+    let restoredExchanges = 0;
+    let restoredAIs = 0;
+
     if (secure?.exchangeConfigs) {
       Object.keys(secure.exchangeConfigs).forEach(ex => {
         state.exchangeConfigs[ex] = { ...(state.exchangeConfigs[ex] || {}), ...(secure.exchangeConfigs[ex] || {}) };
         const conf = state.exchangeConfigs[ex];
         if (document.getElementById(`${ex}-apikey`)) document.getElementById(`${ex}-apikey`).value = conf.apiKey || '';
         if (document.getElementById(`${ex}-apisecret`)) document.getElementById(`${ex}-apisecret`).value = conf.apiSecret || '';
+        if (document.getElementById(`${ex}-testnet`)) document.getElementById(`${ex}-testnet`).checked = !!conf.testnet;
+        if (document.getElementById(`${ex}-demo`)) document.getElementById(`${ex}-demo`).checked = !!conf.demo;
         if (ex === 'okx' && document.getElementById('okx-passphrase')) document.getElementById('okx-passphrase').value = conf.passphrase || '';
+        if (conf.apiKey && conf.apiSecret) {
+          restoredExchanges++;
+          updateExchangeStatus(ex, true);
+        }
       });
     }
     if (secure?.aiConfigs) {
@@ -115,10 +139,20 @@ async function loadSecureCredentials() {
         if (document.getElementById(`${provider}-apikey`)) {
           document.getElementById(`${provider}-apikey`).value = state.aiConfigs[provider].apiKey || '';
         }
+        if (state.aiConfigs[provider].apiKey) {
+          restoredAIs++;
+          updateAIStatusUI(provider, provider === state.activeAI);
+        }
       });
     }
+
     updateWalletUI();
-    addLog('info', 'Credenciais seguras carregadas');
+    addLog('success', `Credenciais seguras carregadas em ${Date.now() - started}ms (${restoredExchanges} corretora(s), ${restoredAIs} IA(s))`);
+
+    if (state.activeExchange && state.exchangeConfigs[state.activeExchange]?.apiKey && state.exchangeConfigs[state.activeExchange]?.apiSecret) {
+      addLog('info', `Atualizando saldo após restaurar credenciais de ${state.activeExchange}...`);
+      setTimeout(() => loadBalance(state.activeExchange), 500);
+    }
   } catch (e) {
     addLog('warning', `Erro ao carregar credenciais seguras: ${e.message}`);
   }
@@ -170,7 +204,9 @@ async function connectExchange(exchange) {
   addLog('info', `Tentando conectar à corretora ${exchange}...`);
 
   try {
+    const started = Date.now();
     const result = await window.electronAPI.testConnection(config);
+    addLog('info', `Resposta de conexão ${exchange} em ${Date.now() - started}ms`);
     if (result.success) {
       state.exchangeConfigs[exchange] = config;
       state.activeExchange = exchange;
@@ -207,7 +243,9 @@ async function testExchange(exchange) {
   showToast(`Testando conexão com ${exchange}...`, 'info');
 
   try {
+    const started = Date.now();
     const result = await window.electronAPI.testConnection(config);
+    addLog('info', `Resposta do teste ${exchange} em ${Date.now() - started}ms`);
     if (result.success) {
       showToast(`Teste de conexão com ${exchange} bem sucedido!`, 'success');
       addLog('success', `Teste de conexão com ${exchange} OK`);
@@ -690,6 +728,8 @@ function displayAnalysis(analysis, raw) {
   const confidence = analysis.confidence || 50;
   const risk = analysis.risk_level || 'MEDIUM';
   const symbol = analysis.symbol || 'BTCUSDT';
+  const execution = analysis.execution || {};
+  const newsSentiment = analysis.news_sentiment || analysis.market_intel?.overall || 'neutral';
   const timestamp = new Date();
 
   // Save to analysis history
@@ -1489,8 +1529,8 @@ function loadSavedConfig() {
       if (config.exchangeConfigs) {
         state.exchangeConfigs = config.exchangeConfigs;
         Object.keys(config.exchangeConfigs).forEach(ex => {
-          updateExchangeStatus(ex, true);
           const conf = config.exchangeConfigs[ex];
+          updateExchangeStatus(ex, !!(conf.apiKey && conf.apiSecret));
           if (document.getElementById(`${ex}-apikey`)) {
             document.getElementById(`${ex}-apikey`).value = conf.apiKey || '';
             document.getElementById(`${ex}-apisecret`).value = conf.apiSecret || '';

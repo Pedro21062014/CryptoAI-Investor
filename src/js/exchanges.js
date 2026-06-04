@@ -1,6 +1,9 @@
 const axios = require('axios');
 const crypto = require('crypto');
 
+// Evita que conexão/teste de API fique preso por muito tempo sem resposta.
+axios.defaults.timeout = 20000;
+
 const STABLECOINS = new Set(['USDT', 'USDC', 'BUSD', 'TUSD', 'DAI', 'FDUSD', 'USD', 'USDP', 'PYUSD']);
 
 function toNumber(value, fallback = 0) {
