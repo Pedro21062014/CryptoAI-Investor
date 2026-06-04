@@ -418,6 +418,7 @@ ipcMain.handle('ai:analyze', async (e, config, data) => aiHandlers.analyze(confi
 ipcMain.handle('ai:test-connection', async (e, config) => aiHandlers.testConnection(config));
 ipcMain.handle('ai:get-analysis', async (e, config, marketData, newsData) => aiHandlers.getAnalysis(config, marketData, newsData));
 ipcMain.handle('ai:list-models', async (e, config) => aiHandlers.listModels(config));
+ipcMain.handle('ai:chat', async (e, config, messages, context) => aiHandlers.chat(config, messages, context));
 
 // News handlers
 const newsHandlers = require('./src/js/news');

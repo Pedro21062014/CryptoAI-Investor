@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   aiTestConnection: (config) => ipcRenderer.invoke('ai:test-connection', config),
   aiGetAnalysis: (config, marketData, newsData) => ipcRenderer.invoke('ai:get-analysis', config, marketData, newsData),
   aiListModels: (config) => ipcRenderer.invoke('ai:list-models', config),
+  aiChat: (config, messages, context) => ipcRenderer.invoke('ai:chat', config, messages, context),
 
   // News
   getCryptoNews: () => ipcRenderer.invoke('news:get-crypto-news'),

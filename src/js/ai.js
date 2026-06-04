@@ -252,7 +252,49 @@ function buildSystemPrompt(config) {
 ${getLanguageInstruction(config.language)}`;
 }
 
+
+const CHAT_SYSTEM_PROMPT = `You are CryptoAI Investor's advanced in-app AI assistant.
+You can chat normally and you can request app actions.
+You can help with trading, risk, bots, automations, portfolio and settings.
+
+When you want the app to execute something, include an ACTION JSON block in your answer exactly like this:
+ACTION_JSON:{"actions":[{"type":"BUY|SELL|CREATE_BOT|CREATE_AI|START_BOT|STOP_BOT|SET_SETTING","symbol":"BTCUSDT","percent":2,"paper":true,"reason":"why"}]}
+
+Rules:
+- For BUY/SELL, always include symbol and percent. Default paper=true unless user explicitly asks real/live order.
+- For CREATE_BOT use mode bot or hybrid, symbols, interval, cycleMinutes, confidence, paper, autoTrade.
+- For CREATE_AI use provider/model only if user asks; otherwise use current configured IA.
+- Always explain what you are doing in the selected language.
+- Be careful with real orders; ask for confirmation unless the user clearly asked real/live execution.`;
+
+async function chat(config, messages, context = {}) {
+  try {
+    const provider = aiProviders[config.provider];
+    if (!provider) return { success: false, error: 'AI provider not supported' };
+    const langInstruction = getLanguageInstruction(config.language);
+    const finalMessages = [
+      { role: 'system', content: `${CHAT_SYSTEM_PROMPT}\n\n${langInstruction}\n\nAPP CONTEXT:\n${JSON.stringify(context, null, 2)}` },
+      ...(messages || [])
+    ];
+    const response = await provider.chat(config, finalMessages);
+    const text = extractResponse(config.provider, response);
+    let actions = [];
+    const match = text.match(/ACTION_JSON\s*:\s*(\{[\s\S]*\})/i);
+    if (match) {
+      try { actions = JSON.parse(match[1]).actions || []; } catch (e) { actions = []; }
+    }
+    const cleanText = text.replace(/ACTION_JSON\s*:\s*\{[\s\S]*\}\s*/i, '').trim();
+    return { success: true, message: cleanText || text, raw: text, actions };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+}
+
 module.exports = {
+  async chat(config, messages, context) {
+    return chat(config, messages, context);
+  },
+
   async listModels(config) {
     return listModels(config);
   },

@@ -30,6 +30,9 @@ const state = {
   balanceHistory: [],
   paperTrading: { cash: 10000, initialCash: 10000, positions: [], history: [], realizedPnl: 0 },
   balanceRefreshInterval: null,
+  aiChatMessages: [],
+  aiAutomations: [],
+  automationIntervals: {},
   coinSelectorData: [],
   coinSelectorSelected: new Set(['BTCUSDT', 'ETHUSDT', 'SOLUSDT']),
   tradeSymbolRules: null
@@ -57,6 +60,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initCoinSelector();
   initTradingUI();
   loadGatewayConfig();
+  loadAIAutomations();
+  syncChatModels();
   ['create-ai-paper', 'create-ai-order-percent'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateAISummary));
   ['create-bot-symbol','create-bot-interval','create-bot-cycle','create-bot-confidence','create-bot-order-percent','create-bot-symbol-list','create-bot-paper','create-bot-multi','create-bot-news','create-bot-news-align','create-bot-autotrade'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateBotSummary));
   initAIModelLoaders();
@@ -2493,6 +2498,195 @@ function loadSavedConfig() {
   }
 }
 
+
+
+// ===== AI Chat Turbo & Automations =====
+function getChatAIConfig() {
+  let provider = document.getElementById('chat-ai-provider')?.value || 'active';
+  if (provider === 'active') provider = state.activeAI;
+  if (!provider || !state.aiConfigs[provider]) return null;
+  const cfg = { ...state.aiConfigs[provider], ...state.riskConfig, language: getSelectedLanguage() };
+  const model = document.getElementById('chat-ai-model')?.value;
+  if (model && model !== 'active') cfg.model = model;
+  return cfg;
+}
+
+function syncChatModels() {
+  const providerSel = document.getElementById('chat-ai-provider');
+  const modelSel = document.getElementById('chat-ai-model');
+  if (!modelSel) return;
+  let provider = providerSel?.value || 'active';
+  if (provider === 'active') provider = state.activeAI;
+  const cache = getModelCache();
+  const models = cache?.[provider]?.models || [];
+  const current = state.aiConfigs?.[provider]?.model || 'active';
+  modelSel.innerHTML = '<option value="active">Modelo atual</option>' + models.map(m => `<option value="${m.id}">${m.name || m.id}</option>`).join('');
+  if ([...modelSel.options].some(o => o.value === current)) modelSel.value = current;
+}
+
+function addChatMessage(role, content) {
+  state.aiChatMessages.push({ role, content, ts: new Date().toISOString() });
+  renderAIChat();
+}
+
+function renderAIChat() {
+  const box = document.getElementById('ai-chat-messages');
+  if (!box) return;
+  if (!state.aiChatMessages.length) {
+    box.innerHTML = '<div class="empty-state"><p>Converse com a IA turbinada. Ela pode executar ações e mostrará cards do que fez.</p></div>';
+    return;
+  }
+  box.innerHTML = state.aiChatMessages.map(m => `<div style="align-self:${m.role === 'user' ? 'flex-end' : 'flex-start'};max-width:82%;padding:12px 14px;border-radius:16px;background:${m.role === 'user' ? 'var(--gradient-primary)' : 'rgba(255,255,255,.06)'};color:${m.role === 'user' ? '#fff' : 'var(--text-primary)'};white-space:pre-wrap;line-height:1.45;"><strong>${m.role === 'user' ? 'Você' : 'IA'}:</strong> ${m.content}</div>`).join('');
+  box.scrollTop = box.scrollHeight;
+}
+
+function addActionCard(containerId, title, detail, status = 'success') {
+  const c = document.getElementById(containerId) || document.getElementById('ai-chat-action-cards');
+  if (!c) return;
+  const color = status === 'success' ? 'var(--accent-green)' : status === 'error' ? 'var(--accent-red)' : 'var(--accent-orange)';
+  const html = `<div style="padding:14px;border:1px solid var(--border-color);border-left:4px solid ${color};border-radius:var(--radius-md);background:rgba(255,255,255,.04);"><div style="font-weight:900;color:var(--text-primary);">${title}</div><div style="font-size:12px;color:var(--text-muted);margin-top:6px;line-height:1.45;">${detail}</div><div style="font-size:11px;color:var(--text-muted);margin-top:8px;">${new Date().toLocaleString('pt-BR')}</div></div>`;
+  c.insertAdjacentHTML('afterbegin', html);
+}
+
+function parseLocalActions(text) {
+  const lower = String(text || '').toLowerCase();
+  const actions = [];
+  const symbolMatch = text.match(/\b([A-Z]{2,12}USDT)\b/i);
+  const percentMatch = text.match(/(\d+(?:[.,]\d+)?)\s*%/);
+  const percent = percentMatch ? parseFloat(percentMatch[1].replace(',', '.')) : 2;
+  if (lower.includes('compr') || lower.includes('buy')) actions.push({ type: 'BUY', symbol: (symbolMatch?.[1] || 'BTCUSDT').toUpperCase(), percent, paper: lower.includes('paper') || !lower.includes('real'), reason: 'pedido direto do usuário' });
+  if (lower.includes('vend') || lower.includes('sell')) actions.push({ type: 'SELL', symbol: (symbolMatch?.[1] || 'BTCUSDT').toUpperCase(), percent, paper: lower.includes('paper') || !lower.includes('real'), reason: 'pedido direto do usuário' });
+  if (lower.includes('crie um bot') || lower.includes('criar bot')) actions.push({ type: 'CREATE_BOT', mode: lower.includes('ia') ? 'hybrid' : 'bot', paper: true, reason: 'pedido direto do usuário' });
+  if (lower.includes('crie ia') || lower.includes('criar ia')) actions.push({ type: 'CREATE_AI', reason: 'pedido direto do usuário' });
+  return actions;
+}
+
+async function executeAIChatAction(action, containerId = 'ai-chat-action-cards') {
+  try {
+    const type = String(action.type || '').toUpperCase();
+    if (['BUY', 'SELL'].includes(type)) {
+      const symbol = String(action.symbol || 'BTCUSDT').toUpperCase();
+      const percent = Math.min(10, Math.max(0.1, Number(action.percent || 2)));
+      const price = await getLatestPrice(symbol);
+      const qty = price ? (toFiniteNumber(state.totalBalance, 0) * percent / 100) / price : 0.001;
+      const analysis = { recommendation: type, symbol, confidence: 100, risk_level: 'MEDIUM', entry_price: price, execution: { shouldExecute: true, reason: action.reason || 'Ação do chat', newsAligned: true } };
+      const oldPaper = document.getElementById('bot-paper-mode')?.checked;
+      if (document.getElementById('bot-paper-mode')) document.getElementById('bot-paper-mode').checked = action.paper !== false && document.getElementById('chat-execution-mode')?.value !== 'real';
+      if (document.getElementById('bot-order-percent')) document.getElementById('bot-order-percent').value = percent;
+      if (document.getElementById('chat-execution-mode')?.value === 'confirm' && action.paper === false && !confirm(`Executar ordem REAL ${type} ${symbol} com ${percent}% do saldo?`)) return;
+      await executeAITrade(analysis);
+      if (document.getElementById('bot-paper-mode') && oldPaper !== undefined) document.getElementById('bot-paper-mode').checked = oldPaper;
+      addActionCard(containerId, `${type} ${symbol}`, `${action.paper === false ? 'Ordem real solicitada' : 'Paper trade'} usando ${percent}% do saldo.`, 'success');
+      return;
+    }
+    if (type === 'CREATE_BOT') {
+      selectCreateBotMode(action.mode === 'hybrid' ? 'hybrid' : 'bot');
+      if (document.getElementById('create-bot-paper')) document.getElementById('create-bot-paper').checked = action.paper !== false;
+      saveCreateBotConfig();
+      addActionCard(containerId, 'Bot criado', `Modo: ${action.mode || 'bot'} | Paper: ${action.paper !== false}`, 'success');
+      return;
+    }
+    if (type === 'CREATE_AI') {
+      openCreateAIModal();
+      addActionCard(containerId, 'IA preparada', 'Modal de criação da IA aberto usando IA Config.', 'success');
+      return;
+    }
+    if (type === 'START_BOT') { await startCryptoBot(); addActionCard(containerId, 'Bot iniciado', 'CryptoBot iniciado pela IA.', 'success'); return; }
+    if (type === 'STOP_BOT') { stopCryptoBot(); addActionCard(containerId, 'Bot parado', 'CryptoBot parado pela IA.', 'warning'); return; }
+    addActionCard(containerId, 'Ação não reconhecida', JSON.stringify(action), 'warning');
+  } catch (e) {
+    addActionCard(containerId, 'Erro ao executar ação', e.message, 'error');
+  }
+}
+
+async function sendAIChatMessage() {
+  const input = document.getElementById('ai-chat-input');
+  const text = input?.value?.trim();
+  if (!text) return;
+  input.value = '';
+  addChatMessage('user', text);
+  const cfg = getChatAIConfig();
+  if (!cfg) { addChatMessage('assistant', 'Configure uma IA na aba IA Config primeiro.'); return; }
+  addChatMessage('assistant', 'Pensando...');
+  const context = { balance: state.totalBalance, exchange: state.activeExchange, positions: state.balanceDetails, paperMode: isPaperMode(), automations: state.aiAutomations };
+  const messages = state.aiChatMessages.filter(m => m.content !== 'Pensando...').slice(-12).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
+  const res = await window.electronAPI.aiChat(cfg, messages, context);
+  state.aiChatMessages = state.aiChatMessages.filter(m => m.content !== 'Pensando...');
+  if (!res.success) { addChatMessage('assistant', `Erro: ${res.error}`); return; }
+  addChatMessage('assistant', res.message);
+  const actions = [...(res.actions || []), ...parseLocalActions(text)];
+  for (const action of actions) await executeAIChatAction(action);
+}
+
+function clearAIChat() {
+  state.aiChatMessages = [];
+  const cards = document.getElementById('ai-chat-action-cards');
+  if (cards) cards.innerHTML = '';
+  renderAIChat();
+}
+
+function loadAIAutomations() {
+  try { state.aiAutomations = JSON.parse(localStorage.getItem('cryptoai-ai-automations') || '[]'); } catch (e) { state.aiAutomations = []; }
+  renderAIAutomations();
+  state.aiAutomations.filter(a => a.enabled).forEach(scheduleAIAutomation);
+}
+
+function saveAIAutomations() { localStorage.setItem('cryptoai-ai-automations', JSON.stringify(state.aiAutomations)); }
+
+function createAIAutomation() {
+  const name = document.getElementById('automation-name')?.value || 'Automação IA';
+  const prompt = document.getElementById('automation-prompt')?.value || '';
+  const interval = parseInt(document.getElementById('automation-interval')?.value || 15);
+  const mode = document.getElementById('automation-mode')?.value || 'paper';
+  if (!prompt.trim()) { showToast('Digite um prompt para a automação', 'warning'); return; }
+  const automation = { id: Date.now(), name, prompt, interval, mode, enabled: true, lastRun: null };
+  state.aiAutomations.unshift(automation);
+  saveAIAutomations();
+  scheduleAIAutomation(automation);
+  renderAIAutomations();
+  addActionCard('automation-action-cards', 'Automação criada', `${name} a cada ${interval} min`, 'success');
+}
+
+function scheduleAIAutomation(a) {
+  if (state.automationIntervals[a.id]) clearInterval(state.automationIntervals[a.id]);
+  state.automationIntervals[a.id] = setInterval(() => runAIAutomation(a.id), Math.max(1, a.interval) * 60 * 1000);
+}
+
+async function runAIAutomation(id) {
+  const a = state.aiAutomations.find(x => x.id === id);
+  if (!a || !a.enabled) return;
+  const cfg = getChatAIConfig();
+  if (!cfg) { addActionCard('automation-action-cards', 'Automação falhou', 'IA não configurada', 'error'); return; }
+  const res = await window.electronAPI.aiChat(cfg, [{ role: 'user', content: a.prompt }], { automation: a, balance: state.totalBalance, exchange: state.activeExchange });
+  a.lastRun = new Date().toISOString();
+  saveAIAutomations(); renderAIAutomations();
+  if (!res.success) { addActionCard('automation-action-cards', a.name, res.error, 'error'); return; }
+  addActionCard('automation-action-cards', a.name, res.message, 'success');
+  for (const action of (res.actions || [])) {
+    if (a.mode === 'paper') action.paper = true;
+    if (a.mode === 'real') action.paper = false;
+    await executeAIChatAction(action, 'automation-action-cards');
+  }
+}
+
+function toggleAIAutomation(id) {
+  const a = state.aiAutomations.find(x => x.id === id); if (!a) return;
+  a.enabled = !a.enabled;
+  if (a.enabled) scheduleAIAutomation(a); else clearInterval(state.automationIntervals[id]);
+  saveAIAutomations(); renderAIAutomations();
+}
+
+function deleteAIAutomation(id) {
+  clearInterval(state.automationIntervals[id]);
+  state.aiAutomations = state.aiAutomations.filter(a => a.id !== id);
+  saveAIAutomations(); renderAIAutomations();
+}
+
+function renderAIAutomations() {
+  const list = document.getElementById('automation-list'); if (!list) return;
+  if (!state.aiAutomations.length) { list.innerHTML = '<div class="empty-state"><p>Nenhuma automação criada</p></div>'; return; }
+  list.innerHTML = state.aiAutomations.map(a => `<div class="analysis-history-item"><div class="analysis-history-row"><div class="analysis-history-left"><span class="badge ${a.enabled ? 'success' : ''}">${a.enabled ? 'ON' : 'OFF'}</span><strong>${a.name}</strong><span>${a.interval} min</span><span>${a.mode}</span></div><div class="analysis-history-right"><button class="btn btn-sm btn-outline" onclick="runAIAutomation(${a.id})">Executar</button><button class="btn btn-sm btn-outline" onclick="toggleAIAutomation(${a.id})">${a.enabled ? 'Pausar' : 'Ativar'}</button><button class="btn btn-sm btn-outline" onclick="deleteAIAutomation(${a.id})">Excluir</button></div></div><div style="font-size:12px;color:var(--text-muted);margin-top:8px;">${a.prompt}</div></div>`).join('');
+}
 
 // ===== Gateway Notifications =====
 const GATEWAY_CHANNELS = [
