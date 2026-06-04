@@ -1,6 +1,6 @@
 {
   "name": "crypto-ai-investor",
-  "version": "1.4.9",
+  "version": "1.5.0",
   "description": "AI-Powered Crypto Investment Desktop Application",
   "main": "main.js",
   "author": "CryptoAI Investor",
@@ -40,7 +40,7 @@
           ]
         }
       ],
-      "icon": "build/icon.png",
+      "icon": "build/icon.ico",
       "sign": false,
       "signAndEditExecutable": false
     },
