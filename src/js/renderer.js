@@ -975,7 +975,7 @@ async function runAnalysisCycle() {
       if (autoTrade !== 'disabled' && riskResult.allowed) {
         if (analysisResult.analysis.recommendation === 'BUY' || analysisResult.analysis.recommendation === 'SELL') {
           if (autoTrade === 'enabled') {
-            executeAITrade(analysisResult.analysis);
+            await executeAITrade(analysisResult.analysis);
           } else if (autoTrade === 'confirmation') {
             requestTradeConfirmation(analysisResult.analysis);
           }
@@ -1007,6 +1007,8 @@ function displayAnalysis(analysis, raw) {
   const risk = analysis.risk_level || 'MEDIUM';
   const symbol = analysis.symbol || 'BTCUSDT';
   const execution = analysis.execution || {};
+  const didExecute = !!(execution.executed || execution.orderSent || analysis.executed);
+  const shouldDisplayExecute = didExecute || !!execution.shouldExecute;
   const newsSentiment = analysis.news_sentiment || analysis.market_intel?.overall || 'neutral';
   const timestamp = new Date();
 
@@ -1077,10 +1079,10 @@ function displayAnalysis(analysis, raw) {
         </div>
         <div class="analysis-detail">
           <div class="analysis-detail-label">Executar?</div>
-          <div class="analysis-detail-value" style="color:${execution.shouldExecute ? 'var(--accent-green)' : 'var(--accent-orange)'}">${execution.shouldExecute ? 'SIM' : 'NÃO'}</div>
+          <div class="analysis-detail-value" id="latest-ai-execution-status" style="color:${shouldDisplayExecute ? 'var(--accent-green)' : 'var(--accent-orange)'}">${shouldDisplayExecute ? 'SIM' : 'NÃO'}${didExecute ? ' ✅' : ''}</div>
         </div>
       </div>
-      ${execution.reason ? `<div class="analysis-reasoning" style="margin-bottom:10px;"><strong>Gate de execução:</strong> ${execution.reason}</div>` : ''}
+      ${execution.reason ? `<div class="analysis-reasoning" id="latest-ai-execution-reason" style="margin-bottom:10px;"><strong>Gate de execução:</strong> ${execution.reason}</div>` : '<div class="analysis-reasoning" id="latest-ai-execution-reason" style="display:none;margin-bottom:10px;"></div>'}
       <div class="analysis-reasoning">
         <strong>Raciocínio:</strong> ${analysis.reasoning || 'Sem detalhes disponíveis'}
       </div>
@@ -1954,6 +1956,19 @@ async function executeTrade() {
 }
 
 
+function updateLatestAIExecutionUI(execution = {}) {
+  const statusEl = document.getElementById('latest-ai-execution-status');
+  const reasonEl = document.getElementById('latest-ai-execution-reason');
+  if (statusEl) {
+    statusEl.textContent = execution.executed ? 'SIM ✅' : execution.shouldExecute ? 'SIM' : 'NÃO';
+    statusEl.style.color = (execution.executed || execution.shouldExecute) ? 'var(--accent-green)' : 'var(--accent-orange)';
+  }
+  if (reasonEl) {
+    reasonEl.style.display = 'block';
+    reasonEl.innerHTML = `<strong>Gate de execução:</strong> ${execution.reason || (execution.executed ? 'Ordem executada com sucesso' : '')}`;
+  }
+}
+
 function getAIMinOrderUsdt(exchange, paperMode) {
   const configured = parseFloat(localStorage.getItem('cryptoai-ai-min-order-usdt') || '5');
   const baseMin = Number.isFinite(configured) ? configured : 5;
@@ -2137,6 +2152,8 @@ async function executeAITrade(analysis) {
       showToast(`Paper trade aberto: ${side} ${order.quantity} ${symbol}`, 'success');
       state.trades.push({ time: new Date(), symbol, side, price: price || 'Paper', quantity: order.quantity, status: 'paper' });
       updateTradesTable();
+      analysis.execution = { ...(analysis.execution || {}), shouldExecute: true, executed: true, reason: `Paper trade aberto com sucesso: ${side} ${order.quantity} ${symbol}` };
+      updateLatestAIExecutionUI(analysis.execution);
       saveConfig();
     } else {
       showToast(result.error, 'error');
@@ -2164,6 +2181,8 @@ async function executeAITrade(analysis) {
         status: 'filled'
       });
       updateTradesTable();
+      analysis.execution = { ...(analysis.execution || {}), shouldExecute: true, executed: true, reason: `Ordem executada com sucesso: ${side} ${executedQty} ${symbol} (${formatUsd(executedValue)})` };
+      updateLatestAIExecutionUI(analysis.execution);
       saveConfig();
       setTimeout(() => loadBalance(exchange), 3000);
     } else {
