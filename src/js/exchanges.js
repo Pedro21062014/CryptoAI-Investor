@@ -486,6 +486,120 @@ const exchanges = {
     getUrl(config) {
       return config.testnet ? this.testnetUrl : this.baseUrl;
     },
+    _rulesCache: new Map(),
+
+    decimalPlaces(step) {
+      const text = String(step || '1');
+      if (text.includes('e-')) return parseInt(text.split('e-')[1], 10) || 0;
+      const decimals = text.split('.')[1] || '';
+      return decimals.replace(/0+$/, '').length;
+    },
+
+    floorToStep(value, step) {
+      const n = Number(value);
+      const s = Number(step);
+      if (!Number.isFinite(n) || !Number.isFinite(s) || s <= 0) return n;
+      const precision = this.decimalPlaces(step);
+      const floored = Math.floor((n + Number.EPSILON) / s) * s;
+      return Number(floored.toFixed(Math.min(12, precision)));
+    },
+
+    ceilToStep(value, step) {
+      const n = Number(value);
+      const s = Number(step);
+      if (!Number.isFinite(n) || !Number.isFinite(s) || s <= 0) return n;
+      const precision = this.decimalPlaces(step);
+      const ceiled = Math.ceil((n - Number.EPSILON) / s) * s;
+      return Number(ceiled.toFixed(Math.min(12, precision)));
+    },
+
+    formatByStep(value, step) {
+      const precision = this.decimalPlaces(step);
+      return Number(value).toFixed(Math.min(12, precision)).replace(/\.?0+$/, '');
+    },
+
+    async getSymbolRules(config, symbol) {
+      const base = this.getUrl(config);
+      const cacheKey = `${base}:${symbol}`;
+      const cached = this._rulesCache.get(cacheKey);
+      if (cached && Date.now() - cached.ts < 10 * 60 * 1000) return cached.rules;
+
+      const response = await axios.get(`${base}/api/v3/exchangeInfo?symbol=${symbol}`, { timeout: 30000 });
+      const info = response.data?.symbols?.[0];
+      if (!info) throw new Error(`Binance: par ${symbol} não encontrado`);
+      if (info.status && info.status !== 'TRADING') throw new Error(`Binance: par ${symbol} não está ativo (${info.status})`);
+
+      const filter = (type) => info.filters?.find(f => f.filterType === type) || null;
+      const lot = filter('LOT_SIZE') || {};
+      const marketLot = filter('MARKET_LOT_SIZE') || {};
+      const price = filter('PRICE_FILTER') || {};
+      const minNotional = filter('MIN_NOTIONAL') || filter('NOTIONAL') || {};
+      const lotStep = Number(lot.stepSize) > 0 ? lot.stepSize : '1';
+      const marketStep = Number(marketLot.stepSize) > 0 ? marketLot.stepSize : lotStep;
+      const rules = {
+        symbol,
+        baseAsset: info.baseAsset,
+        quoteAsset: info.quoteAsset,
+        stepSize: lotStep,
+        minQty: Number(lot.minQty || marketLot.minQty || 0),
+        maxQty: Number(lot.maxQty || marketLot.maxQty || 0),
+        marketStepSize: marketStep,
+        marketMinQty: Number(marketLot.minQty || lot.minQty || 0),
+        marketMaxQty: Number(marketLot.maxQty || lot.maxQty || 0),
+        tickSize: Number(price.tickSize) > 0 ? price.tickSize : '0.00000001',
+        minNotional: Number(minNotional.minNotional || minNotional.notional || 0)
+      };
+      this._rulesCache.set(cacheKey, { ts: Date.now(), rules });
+      return rules;
+    },
+
+    async getTickerPrice(config, symbol) {
+      const base = this.getUrl(config);
+      const response = await axios.get(`${base}/api/v3/ticker/price?symbol=${symbol}`, { timeout: 20000 });
+      return Number(response.data?.price || 0);
+    },
+
+    async normalizeOrderToRules(config, order) {
+      const symbol = String(order.symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+      const orderType = String(order.type || 'MARKET').toUpperCase();
+      const rules = await this.getSymbolRules(config, symbol);
+      const step = orderType === 'MARKET' ? rules.marketStepSize : rules.stepSize;
+      const minQty = orderType === 'MARKET' ? rules.marketMinQty : rules.minQty;
+      const maxQty = orderType === 'MARKET' ? rules.marketMaxQty : rules.maxQty;
+      let quantity = this.floorToStep(Number(order.quantity), step);
+
+      if (!Number.isFinite(quantity) || quantity <= 0) {
+        throw new Error(`Binance ${symbol}: quantidade inválida`);
+      }
+      if (minQty && quantity < minQty) {
+        throw new Error(`Binance ${symbol}: quantidade ${quantity} abaixo do mínimo ${minQty} (LOT_SIZE)`);
+      }
+      if (maxQty && quantity > maxQty) quantity = this.floorToStep(maxQty, step);
+
+      let price = Number(order.price || 0);
+      if (orderType === 'LIMIT') {
+        if (!Number.isFinite(price) || price <= 0) throw new Error(`Binance ${symbol}: ordem LIMIT precisa de preço válido`);
+        price = this.floorToStep(price, rules.tickSize);
+      } else {
+        price = await this.getTickerPrice(config, symbol);
+      }
+
+      const notional = price * quantity;
+      if (rules.minNotional && notional < rules.minNotional) {
+        const neededQty = this.ceilToStep((rules.minNotional / price), step);
+        throw new Error(`Binance ${symbol}: valor da ordem ${notional.toFixed(4)} USDT abaixo do mínimo ${rules.minNotional} USDT. Quantidade mínima aproximada: ${this.formatByStep(neededQty, step)} ${rules.baseAsset}`);
+      }
+
+      return {
+        ...order,
+        symbol,
+        quantity: this.formatByStep(quantity, step),
+        price: orderType === 'LIMIT' ? this.formatByStep(price, rules.tickSize) : undefined,
+        rules,
+        estimatedNotional: notional
+      };
+    },
+
 
     async testConnection(config) {
       try {
@@ -597,33 +711,23 @@ const exchanges = {
       try {
         const base = this.getUrl(config);
         const timestamp = Date.now();
-        const orderType = String(order.type || 'MARKET').toUpperCase();
-        const symbol = String(order.symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-        const side = String(order.side || '').toUpperCase();
-        const quantity = Number(order.quantity);
+        const normalized = await this.normalizeOrderToRules(config, order);
+        const orderType = String(normalized.type || 'MARKET').toUpperCase();
+        const side = String(normalized.side || '').toUpperCase();
 
-        if (!symbol) return { success: false, error: 'Binance: symbol ausente' };
         if (!['BUY', 'SELL'].includes(side)) return { success: false, error: 'Binance: side invalido' };
-        if (!Number.isFinite(quantity) || quantity <= 0) return { success: false, error: 'Binance: quantity invalida' };
 
-        // Lista branca por tipo de ordem. Isso impede definitivamente o erro
-        // "Not all sent parameters were read" causado por parâmetros extras
-        // como price/timeInForce/stopLoss/takeProfit em ordem MARKET.
         const params = {
-          symbol,
+          symbol: normalized.symbol,
           side,
           type: orderType,
-          quantity: quantity.toString(),
+          quantity: normalized.quantity,
           timestamp: timestamp.toString()
         };
 
         if (orderType === 'LIMIT') {
-          const price = Number(order.price);
-          if (!Number.isFinite(price) || price <= 0) {
-            return { success: false, error: 'Binance: ordem LIMIT precisa de preço valido' };
-          }
-          params.price = price.toString();
-          params.timeInForce = order.timeInForce || 'GTC';
+          params.price = normalized.price;
+          params.timeInForce = normalized.timeInForce || 'GTC';
         } else if (orderType !== 'MARKET') {
           return { success: false, error: `Binance: tipo de ordem nao suportado no app (${orderType})` };
         }
@@ -631,9 +735,6 @@ const exchanges = {
         const queryString = this.buildQueryString(params);
         const signature = this.sign(config.apiSecret, queryString);
         const payload = `${queryString}&signature=${signature}`;
-
-        // Envia os parâmetros no body como x-www-form-urlencoded, sem JSON vazio e
-        // sem query params duplicados. Isso evita parâmetros extras na Binance.
         const response = await axios.post(`${base}/api/v3/order`, payload, {
           headers: {
             'X-MBX-APIKEY': config.apiKey,
@@ -641,7 +742,7 @@ const exchanges = {
           },
           transformRequest: [(data) => data]
         });
-        return { success: true, data: response.data };
+        return { success: true, data: response.data, normalizedOrder: normalized };
       } catch (err) {
         const errMsg = err.response?.data?.msg || err.message;
         return { success: false, error: errMsg };

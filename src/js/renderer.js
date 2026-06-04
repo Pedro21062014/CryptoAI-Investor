@@ -1851,14 +1851,15 @@ async function executeTrade() {
   try {
     const result = await window.electronAPI.placeOrder(state.exchangeConfigs[exchange], order);
     if (result.success) {
+      const executedQty = result.normalizedOrder?.quantity || order.quantity;
       showToast(`Trade executado com sucesso!`, 'success');
-      addLog('success', `Trade executado: ${order.side} ${order.quantity} ${order.symbol}`);
+      addLog('success', `Trade executado: ${order.side} ${executedQty} ${order.symbol}`);
       state.trades.push({
         time: new Date(),
         symbol: order.symbol,
         side: order.side,
         price: order.price || 'Market',
-        quantity: order.quantity,
+        quantity: executedQty,
         status: 'filled'
       });
       updateTradesTable();
@@ -1984,14 +1985,15 @@ async function executeAITrade(analysis) {
     const result = await window.electronAPI.placeOrder(state.exchangeConfigs[exchange], order);
     updateAutoTradeChecklist(analysis, order, result);
     if (result.success) {
-      showToast(`Auto-trade executado: ${side} ${order.quantity} ${symbol}`, 'success');
-      addLog('success', `[AUTO-TRADE] ${side} ${order.quantity} ${symbol} executado`);
+      const executedQty = result.normalizedOrder?.quantity || order.quantity;
+      showToast(`Auto-trade executado: ${side} ${executedQty} ${symbol}`, 'success');
+      addLog('success', `[AUTO-TRADE] ${side} ${executedQty} ${symbol} executado`);
       state.trades.push({
         time: new Date(),
         symbol: symbol,
         side: side,
         price: price || 'Market',
-        quantity: order.quantity,
+        quantity: executedQty,
         status: 'filled'
       });
       updateTradesTable();
