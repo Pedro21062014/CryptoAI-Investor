@@ -29,7 +29,9 @@ const state = {
   balanceDetails: [],
   balanceHistory: [],
   paperTrading: { cash: 10000, initialCash: 10000, positions: [], history: [], realizedPnl: 0 },
-  balanceRefreshInterval: null
+  balanceRefreshInterval: null,
+  coinSelectorData: [],
+  coinSelectorSelected: new Set(['BTCUSDT', 'ETHUSDT', 'SOLUSDT'])
 };
 
 // ===== Navigation =====
@@ -51,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
   showApiCachePath();
   loadSecureCredentials();
   setupUpdateProgressListener();
+  initCoinSelector();
   initAIModelLoaders();
   restoreCachedAIModels();
   document.getElementById('app-language')?.addEventListener('change', () => {
@@ -440,6 +443,145 @@ async function refreshAllBalances() {
   }
 }
 
+
+
+// ===== Coin Selector for AI Focus =====
+const FALLBACK_COINS = [
+  { id: 'bitcoin', symbol: 'btc', name: 'Bitcoin', current_price: 0, image: '' },
+  { id: 'ethereum', symbol: 'eth', name: 'Ethereum', current_price: 0, image: '' },
+  { id: 'solana', symbol: 'sol', name: 'Solana', current_price: 0, image: '' },
+  { id: 'binancecoin', symbol: 'bnb', name: 'BNB', current_price: 0, image: '' },
+  { id: 'ripple', symbol: 'xrp', name: 'XRP', current_price: 0, image: '' },
+  { id: 'cardano', symbol: 'ada', name: 'Cardano', current_price: 0, image: '' },
+  { id: 'dogecoin', symbol: 'doge', name: 'Dogecoin', current_price: 0, image: '' },
+  { id: 'avalanche-2', symbol: 'avax', name: 'Avalanche', current_price: 0, image: '' },
+  { id: 'chainlink', symbol: 'link', name: 'Chainlink', current_price: 0, image: '' },
+  { id: 'litecoin', symbol: 'ltc', name: 'Litecoin', current_price: 0, image: '' },
+  { id: 'the-open-network', symbol: 'ton', name: 'Toncoin', current_price: 0, image: '' },
+  { id: 'hyperliquid', symbol: 'hype', name: 'Hyperliquid', current_price: 0, image: '' }
+];
+
+function coinToPair(coin) {
+  return `${String(coin.symbol || '').toUpperCase()}USDT`;
+}
+
+function getMonitorPairsArray() {
+  const raw = document.getElementById('monitor-pairs')?.value || '';
+  return raw.split(',').map(p => p.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean);
+}
+
+function initCoinSelector() {
+  const pairs = getMonitorPairsArray();
+  state.coinSelectorSelected = new Set(pairs.length ? pairs : ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']);
+  updateSelectedCoinsPreview();
+  loadCoinSelectorData(false);
+  document.getElementById('monitor-pairs')?.addEventListener('change', () => {
+    state.coinSelectorSelected = new Set(getMonitorPairsArray());
+    updateSelectedCoinsPreview();
+    saveConfig();
+  });
+}
+
+async function loadCoinSelectorData(force) {
+  try {
+    if (!force) {
+      const cached = JSON.parse(localStorage.getItem('cryptoai-coin-selector-cache') || 'null');
+      if (cached?.coins?.length && Date.now() - cached.ts < 15 * 60 * 1000) {
+        state.coinSelectorData = cached.coins;
+        updateSelectedCoinsPreview();
+        return;
+      }
+    }
+    const url = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=120&page=1&sparkline=false&price_change_percentage=24h';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const coins = await res.json();
+    state.coinSelectorData = Array.isArray(coins) ? coins : FALLBACK_COINS;
+    localStorage.setItem('cryptoai-coin-selector-cache', JSON.stringify({ ts: Date.now(), coins: state.coinSelectorData }));
+    updateSelectedCoinsPreview();
+    renderCoinSelector();
+    showToast('Moedas/preços atualizados', 'success');
+  } catch (e) {
+    state.coinSelectorData = state.coinSelectorData.length ? state.coinSelectorData : FALLBACK_COINS;
+    updateSelectedCoinsPreview();
+    renderCoinSelector();
+    if (force) showToast('Falha ao atualizar moedas: ' + e.message, 'warning');
+  }
+}
+
+function getCoinByPair(pair) {
+  return state.coinSelectorData.find(c => coinToPair(c) === pair) || null;
+}
+
+function updateSelectedCoinsPreview() {
+  const container = document.getElementById('selected-coins-preview');
+  const count = document.getElementById('coin-selector-count');
+  const selected = Array.from(state.coinSelectorSelected || []);
+  if (count) count.textContent = `${selected.length} selecionada${selected.length === 1 ? '' : 's'}`;
+  if (!container) return;
+  if (!selected.length) {
+    container.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Nenhuma moeda selecionada</span>';
+    return;
+  }
+  container.innerHTML = selected.slice(0, 16).map(pair => {
+    const coin = getCoinByPair(pair);
+    const price = coin?.current_price ? `$${Number(coin.current_price).toLocaleString('en-US', { maximumFractionDigits: 6 })}` : '';
+    const img = coin?.image ? `<img src="${coin.image}" style="width:18px;height:18px;border-radius:50%;">` : '<span style="width:18px;height:18px;border-radius:50%;background:var(--gradient-primary);display:inline-block;"></span>';
+    return `<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid var(--border-color);border-radius:999px;background:rgba(255,255,255,.04);font-size:12px;">${img}<strong>${pair.replace('USDT','')}</strong><span style="color:var(--text-muted);">${price}</span></span>`;
+  }).join('') + (selected.length > 16 ? `<span class="badge info">+${selected.length - 16}</span>` : '');
+}
+
+function openCoinSelector() {
+  state.coinSelectorSelected = new Set(getMonitorPairsArray());
+  const modal = document.getElementById('coin-selector-modal');
+  if (modal) modal.style.display = 'flex';
+  renderCoinSelector();
+  if (!state.coinSelectorData.length) loadCoinSelectorData(true);
+}
+
+function closeCoinSelector() {
+  const modal = document.getElementById('coin-selector-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function toggleCoinSelection(pair) {
+  if (state.coinSelectorSelected.has(pair)) state.coinSelectorSelected.delete(pair);
+  else state.coinSelectorSelected.add(pair);
+  renderCoinSelector();
+}
+
+function renderCoinSelector() {
+  const grid = document.getElementById('coin-selector-grid');
+  const badge = document.getElementById('coin-selector-modal-count');
+  if (!grid) return;
+  const q = (document.getElementById('coin-selector-search')?.value || '').toLowerCase().trim();
+  const coins = (state.coinSelectorData.length ? state.coinSelectorData : FALLBACK_COINS).filter(c => {
+    const pair = coinToPair(c);
+    return !q || c.name?.toLowerCase().includes(q) || c.symbol?.toLowerCase().includes(q) || pair.toLowerCase().includes(q);
+  });
+  if (badge) badge.textContent = `${state.coinSelectorSelected.size} selecionada${state.coinSelectorSelected.size === 1 ? '' : 's'}`;
+  grid.innerHTML = coins.map(coin => {
+    const pair = coinToPair(coin);
+    const selected = state.coinSelectorSelected.has(pair);
+    const price = coin.current_price ? `$${Number(coin.current_price).toLocaleString('en-US', { maximumFractionDigits: 8 })}` : 'Preço --';
+    const change = Number(coin.price_change_percentage_24h || 0);
+    return `<div onclick="toggleCoinSelection('${pair}')" style="cursor:pointer;padding:12px;border:1px solid ${selected ? 'var(--accent-cyan)' : 'var(--border-color)'};border-radius:var(--radius-sm);background:${selected ? 'rgba(0,212,255,.10)' : 'rgba(255,255,255,.03)'};display:flex;gap:10px;align-items:center;">
+      ${coin.image ? `<img src="${coin.image}" style="width:34px;height:34px;border-radius:50%;">` : '<div style="width:34px;height:34px;border-radius:50%;background:var(--gradient-primary);"></div>'}
+      <div style="flex:1;min-width:0;"><div style="font-weight:800;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${coin.name || pair}</div><div style="font-size:11px;color:var(--text-muted);">${pair} • ${price}</div></div>
+      <div style="text-align:right;"><div style="color:${change >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'};font-size:12px;font-weight:700;">${change ? (change >= 0 ? '+' : '') + change.toFixed(2) + '%' : '--'}</div><div style="font-size:18px;color:${selected ? 'var(--accent-cyan)' : 'var(--text-muted)'};">${selected ? '✓' : '+'}</div></div>
+    </div>`;
+  }).join('') || '<div class="empty-state"><p>Nenhuma moeda encontrada</p></div>';
+}
+
+function applyCoinSelection() {
+  const selected = Array.from(state.coinSelectorSelected);
+  const input = document.getElementById('monitor-pairs');
+  if (input) input.value = selected.join(',');
+  updateSelectedCoinsPreview();
+  saveConfig();
+  closeCoinSelector();
+  showToast(`${selected.length} moedas selecionadas para a IA`, 'success');
+}
 
 // ===== Dynamic AI Model Loading =====
 const AI_MODEL_PROVIDERS = ['deepseek', 'openai', 'google', 'nvidia', 'claude', 'openrouter'];
@@ -1983,6 +2125,7 @@ function saveConfig() {
       totalBalance: state.totalBalance,
       balanceDetails: state.balanceDetails,
       appLanguage: getSelectedLanguage(),
+      monitorPairs: document.getElementById('monitor-pairs')?.value || '',
       botAdvancedConfig: {
         paperMode: document.getElementById('bot-paper-mode')?.checked !== false,
         multiSymbols: document.getElementById('bot-multi-symbols')?.checked || false,
@@ -2006,6 +2149,10 @@ function loadSavedConfig() {
       if (config.activeAI) state.activeAI = config.activeAI;
       if (config.appLanguage && document.getElementById('app-language')) {
         document.getElementById('app-language').value = config.appLanguage;
+      }
+      if (config.monitorPairs && document.getElementById('monitor-pairs')) {
+        document.getElementById('monitor-pairs').value = config.monitorPairs;
+        state.coinSelectorSelected = new Set(config.monitorPairs.split(',').map(p => p.trim().toUpperCase()).filter(Boolean));
       }
       if (config.botAdvancedConfig) {
         if (document.getElementById('bot-paper-mode')) document.getElementById('bot-paper-mode').checked = config.botAdvancedConfig.paperMode !== false;

@@ -916,8 +916,14 @@
                 </select>
               </div>
               <div class="form-group">
-                <label>Pares para monitorar</label>
+                <label>Moedas para a IA focar</label>
                 <input type="text" id="monitor-pairs" value="BTCUSDT,ETHUSDT,SOLUSDT" placeholder="Separados por vírgula">
+                <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;">
+                  <button type="button" class="btn btn-sm btn-outline" onclick="openCoinSelector()">Selecionar moedas</button>
+                  <button type="button" class="btn btn-sm btn-outline" onclick="loadCoinSelectorData(true)">Atualizar preços</button>
+                  <span class="badge info" id="coin-selector-count">3 selecionadas</span>
+                </div>
+                <div id="selected-coins-preview" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;"></div>
               </div>
             </div>
           </div>
@@ -1679,6 +1685,27 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Coin Selector Modal -->
+  <div id="coin-selector-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:3000;align-items:center;justify-content:center;padding:24px;">
+    <div style="width:min(980px,96vw);max-height:86vh;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:18px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+          <h2 style="margin:0;font-size:20px;">Selecionar moedas para a IA</h2>
+          <p style="margin:4px 0 0;color:var(--text-muted);font-size:12px;">Escolha as moedas que a IA deve monitorar. Preços e logos vêm do CoinGecko.</p>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="closeCoinSelector()">Fechar</button>
+      </div>
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border-color);display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+        <input id="coin-selector-search" placeholder="Buscar moeda... BTC, ETH, Solana" oninput="renderCoinSelector()" style="flex:1;min-width:220px;">
+        <button class="btn btn-sm btn-primary" onclick="applyCoinSelection()">Aplicar seleção</button>
+        <span class="badge info" id="coin-selector-modal-count">0 selecionadas</span>
+      </div>
+      <div id="coin-selector-grid" style="padding:16px 20px;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;">
+        <div class="empty-state"><p>Carregando moedas...</p></div>
       </div>
     </div>
   </div>
