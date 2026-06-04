@@ -28,6 +28,7 @@ const state = {
   totalBalance: 0,
   balanceDetails: [],
   balanceHistory: [],
+  paperTrading: { cash: 10000, initialCash: 10000, positions: [], history: [], realizedPnl: 0 },
   balanceRefreshInterval: null
 };
 
@@ -45,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadSavedTheme();
   loadAnalysisHistory();
   loadBalanceHistory();
+  loadPaperTrading();
   addLog('info', 'Aplicativo iniciado com sucesso');
   showApiCachePath();
   loadSecureCredentials();
@@ -54,6 +56,9 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('app-language')?.addEventListener('change', () => {
     saveConfig();
     addLog('info', `Idioma das respostas da IA alterado para ${getSelectedLanguage()}`);
+  });
+  ['bot-paper-mode', 'bot-multi-symbols', 'bot-symbol-list'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => { saveConfig(); updatePositionsUI(); });
   });
 });
 
@@ -1183,6 +1188,212 @@ function clearBalanceHistory() {
 }
 
 
+
+// ===== Paper Trading / Positions =====
+function loadPaperTrading() {
+  try {
+    const saved = localStorage.getItem('cryptoai-paper-trading');
+    if (saved) state.paperTrading = { ...state.paperTrading, ...JSON.parse(saved) };
+  } catch (e) {}
+  updatePositionsUI();
+}
+
+function savePaperTrading() {
+  try { localStorage.setItem('cryptoai-paper-trading', JSON.stringify(state.paperTrading)); } catch (e) {}
+}
+
+function isPaperMode() {
+  return document.getElementById('bot-paper-mode')?.checked !== false;
+}
+
+async function getLatestPrice(symbol) {
+  try {
+    if (!state.activeExchange || !state.exchangeConfigs[state.activeExchange]) return 0;
+    const interval = document.getElementById('bot-interval')?.value || '60';
+    const res = await window.electronAPI.getCandlesticks(state.exchangeConfigs[state.activeExchange], symbol, interval);
+    if (!res.success) return 0;
+    if (state.activeExchange === 'binance' && Array.isArray(res.data)) return toFiniteNumber(res.data.at(-1)?.[4], 0);
+    if (state.activeExchange === 'bybit') return toFiniteNumber(res.data?.result?.list?.[0]?.[4], 0);
+    if (state.activeExchange === 'okx') return toFiniteNumber(res.data?.data?.[0]?.[4], 0);
+  } catch (e) {}
+  return 0;
+}
+
+function getPaperCurrentPrice(position) {
+  return toFiniteNumber(position.currentPrice || position.entryPrice, position.entryPrice || 0);
+}
+
+function calculatePositionPnl(position) {
+  const current = getPaperCurrentPrice(position);
+  const entry = toFiniteNumber(position.entryPrice, 0);
+  const qty = toFiniteNumber(position.quantity, 0);
+  if (!entry || !qty) return 0;
+  return position.side === 'SELL' ? (entry - current) * qty : (current - entry) * qty;
+}
+
+function openPaperPosition(analysis, order) {
+  const price = toFiniteNumber(analysis.entry_price || analysis.currentPrice || order.price, 0);
+  if (!price) return { success: false, error: 'Paper: preço de entrada ausente' };
+  const notional = price * toFiniteNumber(order.quantity, 0);
+  if (notional <= 0) return { success: false, error: 'Paper: valor da posição inválido' };
+  if (state.paperTrading.cash < notional) return { success: false, error: `Paper: saldo insuficiente (${formatUsd(state.paperTrading.cash)})` };
+
+  const position = {
+    id: Date.now(),
+    symbol: order.symbol,
+    side: order.side,
+    quantity: toFiniteNumber(order.quantity, 0),
+    entryPrice: price,
+    currentPrice: price,
+    openedAt: new Date().toISOString(),
+    confidence: analysis.confidence || 0,
+    stopLoss: analysis.stop_loss || null,
+    takeProfit: analysis.target_price || null,
+    source: analysis.source || 'Bot'
+  };
+  state.paperTrading.cash -= notional;
+  state.paperTrading.positions.push(position);
+  state.paperTrading.history.unshift({ ...position, type: 'OPEN', notional });
+  savePaperTrading();
+  updatePositionsUI();
+  return { success: true, data: { paper: true, position } };
+}
+
+function closePaperPosition(id, reason = 'manual') {
+  const idx = state.paperTrading.positions.findIndex(p => String(p.id) === String(id));
+  if (idx < 0) return;
+  const position = state.paperTrading.positions[idx];
+  const pnl = calculatePositionPnl(position);
+  const exitValue = getPaperCurrentPrice(position) * position.quantity;
+  state.paperTrading.cash += exitValue;
+  state.paperTrading.realizedPnl += pnl;
+  state.paperTrading.positions.splice(idx, 1);
+  state.paperTrading.history.unshift({ ...position, type: 'CLOSE', closedAt: new Date().toISOString(), pnl, reason, exitPrice: getPaperCurrentPrice(position) });
+  savePaperTrading();
+  updatePositionsUI();
+  addLog('success', `[PAPER] Posição fechada ${position.symbol} P&L ${formatUsd(pnl)}`);
+}
+
+async function refreshPaperPrices() {
+  for (const pos of state.paperTrading.positions) {
+    const price = await getLatestPrice(pos.symbol);
+    if (price > 0) pos.currentPrice = price;
+  }
+  savePaperTrading();
+}
+
+async function updatePositionsUI() {
+  await refreshPaperPrices();
+  const openPnl = state.paperTrading.positions.reduce((sum, p) => sum + calculatePositionPnl(p), 0);
+  const equity = state.paperTrading.cash + state.paperTrading.positions.reduce((sum, p) => sum + getPaperCurrentPrice(p) * p.quantity, 0);
+  const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+  setText('paper-equity', formatUsd(equity));
+  setText('paper-open-pnl', formatUsd(openPnl));
+  setText('paper-realized-pnl', formatUsd(state.paperTrading.realizedPnl || 0));
+  setText('positions-count', state.paperTrading.positions.length);
+  const badge = document.getElementById('paper-mode-badge');
+  if (badge) { badge.textContent = isPaperMode() ? 'Paper Trading ON' : 'Modo Real'; badge.className = isPaperMode() ? 'badge success' : 'badge error'; }
+
+  const tbody = document.getElementById('positions-tbody');
+  if (tbody) {
+    if (!state.paperTrading.positions.length) tbody.innerHTML = '<tr><td colspan="8" class="empty-row">Nenhuma posição aberta</td></tr>';
+    else tbody.innerHTML = state.paperTrading.positions.map(p => {
+      const pnl = calculatePositionPnl(p);
+      return `<tr><td><strong>${p.symbol}</strong></td><td><span class="badge ${p.side === 'BUY' ? 'success' : 'error'}">${p.side}</span></td><td>${p.quantity}</td><td>$${toFiniteNumber(p.entryPrice,0).toLocaleString()}</td><td>$${getPaperCurrentPrice(p).toLocaleString()}</td><td style="color:${pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${formatUsd(pnl)}</td><td>${p.confidence}%</td><td><button class="btn btn-sm btn-outline" onclick="closePaperPosition(${p.id})">Fechar</button></td></tr>`;
+    }).join('');
+  }
+  const hist = document.getElementById('paper-history-body');
+  if (hist) {
+    if (!state.paperTrading.history.length) hist.innerHTML = '<div class="empty-state"><p>Nenhum trade simulado ainda</p></div>';
+    else hist.innerHTML = state.paperTrading.history.slice(0, 80).map(h => `<div class="analysis-history-item"><div class="analysis-history-row"><div class="analysis-history-left"><span class="badge ${h.type === 'OPEN' ? 'success' : 'info'}">${h.type}</span><span class="analysis-history-symbol">${h.symbol}</span><span>${h.side}</span></div><div class="analysis-history-right"><span>${h.pnl !== undefined ? formatUsd(h.pnl) : formatUsd(h.notional || 0)}</span><span class="analysis-history-time">${new Date(h.closedAt || h.openedAt).toLocaleString('pt-BR')}</span></div></div></div>`).join('');
+  }
+}
+
+function resetPaperTrading() {
+  if (!confirm('Resetar carteira paper trading para $10.000 e limpar posições/histórico?')) return;
+  state.paperTrading = { cash: 10000, initialCash: 10000, positions: [], history: [], realizedPnl: 0 };
+  savePaperTrading();
+  updatePositionsUI();
+}
+
+
+// ===== Multi-symbol Bot Helpers & Backtesting =====
+function getBotSymbolList() {
+  const raw = document.getElementById('bot-symbol-list')?.value || getCurrentBotSymbol();
+  return raw.split(',').map(s => s.trim().toUpperCase().replace(/[^A-Z0-9]/g, '')).filter(Boolean).slice(0, 20);
+}
+
+function scoreAnalysisForOpportunity(analysis = {}) {
+  const recScore = analysis.recommendation === 'BUY' ? 25 : analysis.recommendation === 'SELL' ? 10 : 0;
+  const confidence = toFiniteNumber(analysis.confidence, 0);
+  const riskPenalty = { LOW: 0, MEDIUM: 5, HIGH: 15, EXTREME: 30 }[analysis.risk_level] || 5;
+  const newsBonus = analysis.news_sentiment === 'bullish' ? 5 : analysis.news_sentiment === 'bearish' ? -5 : 0;
+  return recScore + confidence - riskPenalty + newsBonus;
+}
+
+async function runBacktest() {
+  if (!state.activeExchange || !state.exchangeConfigs[state.activeExchange]) {
+    showToast('Conecte uma corretora para baixar candles do backtest', 'warning');
+    return;
+  }
+  const status = document.getElementById('backtest-status');
+  const container = document.getElementById('backtest-results');
+  if (status) { status.textContent = 'Rodando'; status.className = 'badge warning'; }
+  if (container) container.innerHTML = '<div class="empty-state"><p>Baixando candles e simulando...</p></div>';
+  try {
+    const symbol = (document.getElementById('backtest-symbol')?.value || 'BTCUSDT').toUpperCase();
+    const interval = document.getElementById('backtest-interval')?.value || '60';
+    const initialCapital = parseFloat(document.getElementById('backtest-capital')?.value || 10000);
+    const orderPct = parseFloat(document.getElementById('backtest-order-percent')?.value || 5) / 100;
+    const res = await window.electronAPI.getCandlesticks(state.exchangeConfigs[state.activeExchange], symbol, interval);
+    if (!res.success) throw new Error(res.error || 'Erro ao baixar candles');
+
+    let closes = [];
+    if (state.activeExchange === 'binance' && Array.isArray(res.data)) closes = res.data.map(k => toFiniteNumber(k[4], 0));
+    else if (state.activeExchange === 'bybit') closes = (res.data?.result?.list || []).slice().reverse().map(k => toFiniteNumber(k[4], 0));
+    else if (state.activeExchange === 'okx') closes = (res.data?.data || []).slice().reverse().map(k => toFiniteNumber(k[4], 0));
+    closes = closes.filter(v => v > 0);
+    if (closes.length < 30) throw new Error('Dados insuficientes para backtest');
+
+    let cash = initialCapital, qty = 0, entry = 0, trades = [], equityPeak = initialCapital, maxDrawdown = 0;
+    for (let i = 20; i < closes.length; i++) {
+      const window20 = closes.slice(i - 20, i);
+      const window8 = closes.slice(i - 8, i);
+      const sma20 = window20.reduce((a,b)=>a+b,0)/window20.length;
+      const sma8 = window8.reduce((a,b)=>a+b,0)/window8.length;
+      const price = closes[i];
+      const equity = cash + qty * price;
+      equityPeak = Math.max(equityPeak, equity);
+      maxDrawdown = Math.max(maxDrawdown, ((equityPeak - equity) / equityPeak) * 100);
+      if (qty === 0 && sma8 > sma20 * 1.002) {
+        const notional = cash * orderPct;
+        qty = notional / price; cash -= notional; entry = price;
+        trades.push({ type: 'BUY', price, i });
+      } else if (qty > 0 && (sma8 < sma20 * 0.998 || price >= entry * 1.04 || price <= entry * 0.98)) {
+        const pnl = (price - entry) * qty;
+        cash += qty * price; trades.push({ type: 'SELL', price, pnl, i }); qty = 0; entry = 0;
+      }
+    }
+    const finalEquity = cash + qty * closes.at(-1);
+    const sells = trades.filter(t => t.type === 'SELL');
+    const wins = sells.filter(t => t.pnl > 0).length;
+    const pnl = finalEquity - initialCapital;
+    if (status) { status.textContent = 'Concluído'; status.className = 'badge success'; }
+    if (container) container.innerHTML = `
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-info"><span class="stat-label">Resultado</span><span class="stat-value" style="color:${pnl>=0?'var(--accent-green)':'var(--accent-red)'}">${formatUsd(pnl)}</span></div></div>
+        <div class="stat-card"><div class="stat-info"><span class="stat-label">Equity final</span><span class="stat-value">${formatUsd(finalEquity)}</span></div></div>
+        <div class="stat-card"><div class="stat-info"><span class="stat-label">Win Rate</span><span class="stat-value">${sells.length ? Math.round(wins/sells.length*100) : 0}%</span></div></div>
+        <div class="stat-card"><div class="stat-info"><span class="stat-label">Drawdown máx</span><span class="stat-value">${maxDrawdown.toFixed(2)}%</span></div></div>
+      </div>
+      <div style="margin-top:14px;max-height:360px;overflow-y:auto;">${trades.slice(-60).reverse().map(t => `<div class="analysis-history-item"><div class="analysis-history-row"><span class="badge ${t.type==='BUY'?'success':'error'}">${t.type}</span><span>${symbol}</span><span>$${t.price.toLocaleString()}</span><span>${t.pnl!==undefined?formatUsd(t.pnl):''}</span></div></div>`).join('')}</div>
+    `;
+  } catch (e) {
+    if (status) { status.textContent = 'Erro'; status.className = 'badge error'; }
+    if (container) container.innerHTML = `<div class="empty-state"><p>Erro no backtest: ${e.message}</p></div>`;
+  }
+}
+
 // ===== Auto-Trade Checklist =====
 function getCurrentBotSymbol() {
   let symbol = document.getElementById('bot-symbol')?.value || 'BTCUSDT';
@@ -1435,6 +1646,22 @@ async function executeAITrade(analysis) {
     }
   } catch (err) {
     addLog('warning', `[AUTO-TRADE] Validação de risco falhou: ${err.message}`);
+  }
+
+  if (isPaperMode()) {
+    addLog('info', `[PAPER] Simulando ${side} ${order.quantity} ${symbol} | ${orderPercent}% do saldo | conf ${confidence}%`);
+    const result = openPaperPosition(analysis, order);
+    updateAutoTradeChecklist(analysis, order, result);
+    if (result.success) {
+      showToast(`Paper trade aberto: ${side} ${order.quantity} ${symbol}`, 'success');
+      state.trades.push({ time: new Date(), symbol, side, price: price || 'Paper', quantity: order.quantity, status: 'paper' });
+      updateTradesTable();
+      saveConfig();
+    } else {
+      showToast(result.error, 'error');
+      addLog('error', `[PAPER] Falha: ${result.error}`);
+    }
+    return;
   }
 
   addLog('info', `[AUTO-TRADE] Executando ${side} ${order.quantity} ${symbol} | ${orderPercent}% do saldo | conf ${confidence}%`);
@@ -1713,7 +1940,12 @@ function saveConfig() {
       modelSelections: modelSelections,
       totalBalance: state.totalBalance,
       balanceDetails: state.balanceDetails,
-      appLanguage: getSelectedLanguage()
+      appLanguage: getSelectedLanguage(),
+      botAdvancedConfig: {
+        paperMode: document.getElementById('bot-paper-mode')?.checked !== false,
+        multiSymbols: document.getElementById('bot-multi-symbols')?.checked || false,
+        symbolList: document.getElementById('bot-symbol-list')?.value || ''
+      }
     };
     saveSecureCredentials();
     localStorage.setItem('cryptoai-config', JSON.stringify(config));
@@ -1732,6 +1964,11 @@ function loadSavedConfig() {
       if (config.activeAI) state.activeAI = config.activeAI;
       if (config.appLanguage && document.getElementById('app-language')) {
         document.getElementById('app-language').value = config.appLanguage;
+      }
+      if (config.botAdvancedConfig) {
+        if (document.getElementById('bot-paper-mode')) document.getElementById('bot-paper-mode').checked = config.botAdvancedConfig.paperMode !== false;
+        if (document.getElementById('bot-multi-symbols')) document.getElementById('bot-multi-symbols').checked = !!config.botAdvancedConfig.multiSymbols;
+        if (document.getElementById('bot-symbol-list') && config.botAdvancedConfig.symbolList) document.getElementById('bot-symbol-list').value = config.botAdvancedConfig.symbolList;
       }
 
       // Restore exchange statuses
@@ -2163,8 +2400,10 @@ async function runCryptoBotCycle(force = false) {
   const minConfidence = parseFloat(document.getElementById('bot-min-confidence')?.value || 72);
   const requireNewsAlignment = document.getElementById('bot-require-news-alignment')?.checked !== false;
   const analyzeNewsContinuously = document.getElementById('bot-news-continuous')?.checked !== false;
+  const multiSymbolsEnabled = document.getElementById('bot-multi-symbols')?.checked || false;
+  const candidateSymbols = multiSymbolsEnabled ? getBotSymbolList() : [symbol];
 
-  addLog('info', `[CryptoBot] Ciclo continuo iniciado - ${symbol} - Modo: ${botState.mode}`);
+  addLog('info', `[CryptoBot] Ciclo continuo iniciado - ${multiSymbolsEnabled ? candidateSymbols.join(',') : symbol} - Modo: ${botState.mode}`);
 
   try {
     let botResult = null;
@@ -2192,12 +2431,38 @@ async function runCryptoBotCycle(force = false) {
 
     // Bot analysis (technical indicators + news gate)
     if (botState.mode === 'bot' || botState.mode === 'hybrid') {
-      botResult = await window.electronAPI.botAnalyze(
-        state.exchangeConfigs[state.activeExchange],
-        symbol,
-        interval,
-        context
-      );
+      if (multiSymbolsEnabled) {
+        const opportunities = [];
+        for (const candidate of candidateSymbols) {
+          const result = await window.electronAPI.botAnalyze(
+            state.exchangeConfigs[state.activeExchange],
+            candidate,
+            interval,
+            context
+          );
+          if (result?.success) {
+            opportunities.push({ symbol: candidate, result, score: scoreAnalysisForOpportunity(result.analysis) });
+          } else {
+            addLog('warning', `[CryptoBot] ${candidate} ignorado: ${result?.error || 'erro desconhecido'}`);
+          }
+        }
+        opportunities.sort((a, b) => b.score - a.score);
+        if (opportunities.length > 0) {
+          symbol = opportunities[0].symbol;
+          botResult = opportunities[0].result;
+          botResult.analysis.factors = [...(botResult.analysis.factors || []), `Ranking multi-moedas: ${opportunities.slice(0, 5).map(o => o.symbol + '=' + Math.round(o.score)).join(', ')}`];
+          addLog('success', `[CryptoBot] Melhor oportunidade: ${symbol} (score ${Math.round(opportunities[0].score)})`);
+        } else {
+          botResult = { success: false, error: 'Nenhum par da lista gerou análise válida' };
+        }
+      } else {
+        botResult = await window.electronAPI.botAnalyze(
+          state.exchangeConfigs[state.activeExchange],
+          symbol,
+          interval,
+          context
+        );
+      }
     }
 
     // AI analysis with news/sentiment context

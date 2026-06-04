@@ -80,6 +80,14 @@
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         <span>Trading</span>
       </a>
+      <a href="#" class="nav-item" data-page="positions">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="5"/><rect x="12" y="8" width="3" height="9"/><rect x="17" y="5" width="3" height="12"/></svg>
+        <span>Posições</span>
+      </a>
+      <a href="#" class="nav-item" data-page="backtest">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.5 15a9 9 0 1 0 2.13-9.36L1 10"/><path d="M12 7v5l3 2"/></svg>
+        <span>Backtest</span>
+      </a>
       <a href="#" class="nav-item" data-page="news">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><line x1="10" y1="6" x2="18" y2="6"/><line x1="10" y1="10" x2="18" y2="10"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
         <span>Notícias</span>
@@ -1076,6 +1084,17 @@
                 <input type="number" id="bot-order-percent" value="2" min="0.1" max="10" step="0.1">
               </div>
               <div class="form-group checkbox-group">
+                <label><input type="checkbox" id="bot-paper-mode" checked> Paper Trading interno (simulado, sem enviar ordem real)</label>
+                <small style="color:var(--text-muted);font-size:11px;margin-top:4px;display:block;">Recomendado para testar. Quando ativo, o bot abre posições simuladas.</small>
+              </div>
+              <div class="form-group checkbox-group">
+                <label><input type="checkbox" id="bot-multi-symbols"> Bot multi-moedas (analisar lista e escolher melhor)</label>
+              </div>
+              <div class="form-group">
+                <label>Lista multi-moedas</label>
+                <input type="text" id="bot-symbol-list" value="BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,BNBUSDT,ADAUSDT,DOGEUSDT,AVAXUSDT,LINKUSDT,HYPEUSDT" placeholder="BTCUSDT,ETHUSDT,SOLUSDT...">
+              </div>
+              <div class="form-group checkbox-group">
                 <label><input type="checkbox" id="bot-news-continuous" checked> Analisar notícias e sentimento em todos os ciclos</label>
               </div>
               <div class="form-group checkbox-group">
@@ -1355,6 +1374,52 @@
             <button class="btn btn-primary btn-block" onclick="requestAIAnalysis()">Solicitar Análise</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Positions Page -->
+    <div class="page" id="page-positions">
+      <div class="page-header">
+        <h1>Posições</h1>
+        <div class="header-actions" style="display:flex;gap:10px;align-items:center;">
+          <span class="badge info" id="paper-mode-badge">Paper Trading</span>
+          <button class="btn btn-outline" onclick="resetPaperTrading()">Resetar Simulação</button>
+          <button class="btn btn-primary" onclick="updatePositionsUI()">Atualizar</button>
+        </div>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card"><div class="stat-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div class="stat-info"><span class="stat-label">Equity Paper</span><span class="stat-value" id="paper-equity">$10,000.00</span></div></div>
+        <div class="stat-card"><div class="stat-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/></svg></div><div class="stat-info"><span class="stat-label">P&L Aberto</span><span class="stat-value" id="paper-open-pnl">$0.00</span></div></div>
+        <div class="stat-card"><div class="stat-icon purple"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg></div><div class="stat-info"><span class="stat-label">Posições</span><span class="stat-value" id="positions-count">0</span></div></div>
+        <div class="stat-card"><div class="stat-icon orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div class="stat-info"><span class="stat-label">P&L Realizado</span><span class="stat-value" id="paper-realized-pnl">$0.00</span></div></div>
+      </div>
+      <div class="card card-full" style="margin-top:16px;">
+        <div class="card-header"><h3>Posições Abertas</h3></div>
+        <div class="card-body"><table class="data-table"><thead><tr><th>Par</th><th>Lado</th><th>Qtd</th><th>Entrada</th><th>Atual</th><th>P&L</th><th>Conf</th><th>Ações</th></tr></thead><tbody id="positions-tbody"><tr><td colspan="8" class="empty-row">Nenhuma posição aberta</td></tr></tbody></table></div>
+      </div>
+      <div class="card card-full" style="margin-top:16px;">
+        <div class="card-header"><h3>Histórico Paper Trading</h3></div>
+        <div class="card-body" id="paper-history-body" style="max-height:360px;overflow-y:auto;"><div class="empty-state"><p>Nenhum trade simulado ainda</p></div></div>
+      </div>
+    </div>
+
+    <!-- Backtest Page -->
+    <div class="page" id="page-backtest">
+      <div class="page-header"><h1>Backtesting</h1><button class="btn btn-primary" onclick="runBacktest()">Rodar Backtest</button></div>
+      <div class="card card-full">
+        <div class="card-header"><h3>Configuração do Backtest</h3><span class="badge info">Beta</span></div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group"><label>Par</label><input id="backtest-symbol" value="BTCUSDT"></div>
+            <div class="form-group"><label>Intervalo</label><select id="backtest-interval"><option value="5">5 Min</option><option value="15">15 Min</option><option value="60" selected>1 Hora</option><option value="240">4 Horas</option><option value="D">1 Dia</option></select></div>
+            <div class="form-group"><label>Saldo inicial</label><input type="number" id="backtest-capital" value="10000" min="100"></div>
+            <div class="form-group"><label>Trade (% saldo)</label><input type="number" id="backtest-order-percent" value="5" min="1" max="50"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card card-full" style="margin-top:16px;">
+        <div class="card-header"><h3>Resultado</h3><span class="badge" id="backtest-status">Aguardando</span></div>
+        <div class="card-body" id="backtest-results"><div class="empty-state"><p>Configure e rode um backtest</p></div></div>
       </div>
     </div>
 
