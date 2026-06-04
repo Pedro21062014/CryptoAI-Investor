@@ -131,6 +131,73 @@ const aiProviders = {
   }
 };
 
+
+function normalizeModels(provider, data) {
+  let models = [];
+  if (Array.isArray(data?.data)) models = data.data;
+  else if (Array.isArray(data?.models)) models = data.models;
+  else if (Array.isArray(data)) models = data;
+
+  return models.map(model => {
+    const rawId = model.id || model.name || model.model || model.slug;
+    if (!rawId) return null;
+    const id = provider === 'google' ? String(rawId).replace(/^models\//, '') : String(rawId);
+    const label = model.display_name || model.displayName || model.name || model.id || id;
+    return {
+      id,
+      name: String(label).replace(/^models\//, ''),
+      description: model.description || model.owned_by || model.created_by || '',
+      contextLength: model.context_length || model.contextLength || model.input_token_limit || null
+    };
+  }).filter(Boolean).sort((a, b) => a.id.localeCompare(b.id));
+}
+
+async function listModels(config) {
+  const providerName = config.provider;
+  const provider = aiProviders[providerName];
+  if (!provider) return { success: false, error: 'AI provider not supported' };
+
+  try {
+    let response;
+    if (providerName === 'google') {
+      response = await axios.get(`${provider.baseUrl}/models?key=${config.apiKey}`, { timeout: 30000 });
+      return { success: true, models: normalizeModels(providerName, response.data).filter(m => !m.id || m.id.includes('gemini')), raw: response.data };
+    }
+
+    if (providerName === 'claude') {
+      response = await axios.get(`${provider.baseUrl}/models`, {
+        timeout: 30000,
+        headers: {
+          'x-api-key': config.apiKey,
+          'anthropic-version': '2023-06-01'
+        }
+      });
+      return { success: true, models: normalizeModels(providerName, response.data), raw: response.data };
+    }
+
+    const baseUrl = providerName === 'custom'
+      ? String(config.baseUrl || '').replace(/\/$/, '')
+      : provider.baseUrl;
+    if (!baseUrl) return { success: false, error: 'URL base da API custom nao informada' };
+
+    response = await axios.get(`${baseUrl}/models`, {
+      timeout: 30000,
+      headers: {
+        ...(config.apiKey ? { Authorization: `Bearer ${config.apiKey}` } : {}),
+        ...(providerName === 'openrouter' ? {
+          'HTTP-Referer': 'https://crypto-ai-investor.app',
+          'X-Title': 'CryptoAI Investor'
+        } : {}),
+        ...(config.customHeaders || {})
+      }
+    });
+    return { success: true, models: normalizeModels(providerName, response.data), raw: response.data };
+  } catch (err) {
+    const message = err.response?.data?.error?.message || err.response?.data?.message || err.response?.data?.error || err.message;
+    return { success: false, error: typeof message === 'string' ? message : JSON.stringify(message) };
+  }
+}
+
 function extractResponse(provider, data) {
   try {
     if (provider === 'google') {
@@ -186,6 +253,10 @@ ${getLanguageInstruction(config.language)}`;
 }
 
 module.exports = {
+  async listModels(config) {
+    return listModels(config);
+  },
+
   async analyze(config, data) {
     try {
       const provider = aiProviders[config.provider];

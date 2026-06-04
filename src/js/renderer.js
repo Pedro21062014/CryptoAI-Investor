@@ -49,6 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
   showApiCachePath();
   loadSecureCredentials();
   setupUpdateProgressListener();
+  initAIModelLoaders();
+  restoreCachedAIModels();
   document.getElementById('app-language')?.addEventListener('change', () => {
     saveConfig();
     addLog('info', `Idioma das respostas da IA alterado para ${getSelectedLanguage()}`);
@@ -432,6 +434,117 @@ async function refreshAllBalances() {
   }
 }
 
+
+// ===== Dynamic AI Model Loading =====
+const AI_MODEL_PROVIDERS = ['deepseek', 'openai', 'google', 'nvidia', 'claude', 'openrouter'];
+
+function getModelSelect(provider) {
+  return document.getElementById(`${provider}-model`);
+}
+
+function getModelCache() {
+  try {
+    return JSON.parse(localStorage.getItem('cryptoai-model-cache') || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveModelCache(provider, models) {
+  try {
+    const cache = getModelCache();
+    cache[provider] = { models, updatedAt: new Date().toISOString() };
+    localStorage.setItem('cryptoai-model-cache', JSON.stringify(cache));
+  } catch (e) {}
+}
+
+function populateModelSelect(provider, models, preferredModel) {
+  const select = getModelSelect(provider);
+  if (!select || !Array.isArray(models) || models.length === 0) return;
+
+  const current = preferredModel || select.value;
+  const unique = [];
+  const seen = new Set();
+  models.forEach(model => {
+    const id = typeof model === 'string' ? model : model.id;
+    const name = typeof model === 'string' ? model : (model.name || model.id);
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    unique.push({ id, name });
+  });
+
+  select.innerHTML = unique.map(model => `<option value="${model.id}">${model.name}</option>`).join('') + '<option value="custom">Personalizado...</option>';
+
+  if (current && [...select.options].some(o => o.value === current)) {
+    select.value = current;
+  } else if (unique.length > 0) {
+    select.value = unique[0].id;
+  }
+  handleModelChange(provider);
+}
+
+function restoreCachedAIModels() {
+  const cache = getModelCache();
+  AI_MODEL_PROVIDERS.forEach(provider => {
+    if (cache[provider]?.models?.length) {
+      const savedModel = state.aiConfigs?.[provider]?.model;
+      populateModelSelect(provider, cache[provider].models, savedModel);
+      const badge = document.getElementById(`models-status-${provider}`);
+      if (badge) badge.textContent = `${cache[provider].models.length} cache`;
+    }
+  });
+}
+
+function initAIModelLoaders() {
+  AI_MODEL_PROVIDERS.forEach(provider => {
+    const select = getModelSelect(provider);
+    if (!select) return;
+    const group = select.closest('.form-group');
+    if (!group || group.querySelector(`[data-load-models="${provider}"]`)) return;
+
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap;';
+    row.innerHTML = `
+      <button type="button" class="btn btn-sm btn-outline" data-load-models="${provider}" onclick="loadAIModels('${provider}')">Carregar modelos da API</button>
+      <span class="badge info" id="models-status-${provider}">estático</span>
+    `;
+    group.appendChild(row);
+  });
+}
+
+async function loadAIModels(provider) {
+  const config = getAIConfig(provider);
+  if (!config.apiKey && provider !== 'openrouter') {
+    showToast('Preencha a API Key para carregar os modelos', 'warning');
+    return;
+  }
+
+  const btn = document.querySelector(`[data-load-models="${provider}"]`);
+  const status = document.getElementById(`models-status-${provider}`);
+  const oldText = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = 'Carregando...'; }
+  if (status) { status.textContent = 'consultando API'; status.className = 'badge warning'; }
+
+  try {
+    const result = await window.electronAPI.aiListModels(config);
+    if (!result.success) throw new Error(result.error || 'Erro ao carregar modelos');
+    if (!result.models || result.models.length === 0) throw new Error('API não retornou modelos');
+
+    populateModelSelect(provider, result.models, config.model);
+    saveModelCache(provider, result.models);
+    saveConfig();
+    if (status) { status.textContent = `${result.models.length} modelos`; status.className = 'badge success'; }
+    showToast(`${result.models.length} modelos carregados de ${provider}`, 'success');
+    addLog('success', `Modelos carregados de ${provider}: ${result.models.length}`);
+  } catch (err) {
+    if (status) { status.textContent = 'erro'; status.className = 'badge error'; }
+    showToast(`Erro ao carregar modelos: ${err.message}`, 'error');
+    addLog('error', `Erro ao carregar modelos de ${provider}: ${err.message}`);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = oldText || 'Carregar modelos da API'; }
+  }
+}
+
 // ===== AI Provider Selection (NEW) =====
 function selectAIProvider(provider) {
   document.querySelectorAll('.ai-strip-item').forEach(i => i.classList.remove('active'));
@@ -512,6 +625,7 @@ async function connectAI(provider) {
       showToast(`IA ${provider} conectada com sucesso!`, 'success');
       addLog('success', `IA ${provider} conectada`);
       updateAIStatusUI(provider, true);
+      loadAIModels(provider);
     } else {
       showToast(`Erro: ${result.error}`, 'error');
       addLog('error', `Falha na conexão com IA ${provider}: ${result.error}`);
