@@ -62,7 +62,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadGatewayConfig();
   loadAIAutomations();
   syncChatModels();
-  ['create-ai-paper', 'create-ai-order-percent'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateAISummary));
+  ['create-ai-paper', 'create-ai-min-usdt'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateAISummary));
   ['create-bot-symbol','create-bot-interval','create-bot-cycle','create-bot-confidence','create-bot-order-percent','create-bot-symbol-list','create-bot-paper','create-bot-multi','create-bot-news','create-bot-news-align','create-bot-autotrade'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateBotSummary));
   initAIModelLoaders();
   restoreCachedAIModels();
@@ -1951,6 +1951,36 @@ async function executeTrade() {
   }
 }
 
+
+function getAIMinOrderUsdt(exchange, paperMode) {
+  const configured = parseFloat(localStorage.getItem('cryptoai-ai-min-order-usdt') || '5');
+  const baseMin = Number.isFinite(configured) ? configured : 5;
+  if (exchange === 'binance' && !paperMode) return Math.max(5, baseMin);
+  return Math.max(0.1, baseMin);
+}
+
+function getAIChosenNotional(analysis, totalBalance, exchange, paperMode) {
+  const minUsdt = getAIMinOrderUsdt(exchange, paperMode);
+  const explicitUsdt = toFiniteNumber(analysis.order_usdt ?? analysis.orderUsd ?? analysis.position_usdt ?? analysis.size_usdt, 0);
+  if (explicitUsdt > 0) return Math.min(totalBalance || explicitUsdt, Math.max(minUsdt, explicitUsdt));
+
+  const explicitPct = toFiniteNumber(analysis.position_size_percent ?? analysis.order_percent ?? analysis.percent ?? analysis.size_percent, 0);
+  if (explicitPct > 0 && totalBalance > 0) return Math.max(minUsdt, totalBalance * (Math.min(25, explicitPct) / 100));
+
+  // Se a IA não informou tamanho, o app deriva automaticamente pelo sinal.
+  const confidence = toFiniteNumber(analysis.confidence, 50);
+  const risk = String(analysis.risk_level || 'MEDIUM').toUpperCase();
+  let pct = 1;
+  if (confidence >= 90) pct = 5;
+  else if (confidence >= 80) pct = 3.5;
+  else if (confidence >= 70) pct = 2;
+  else pct = 1;
+  if (risk === 'HIGH') pct *= 0.5;
+  if (risk === 'EXTREME') pct *= 0.25;
+  if (!totalBalance || totalBalance <= 0) return minUsdt;
+  return Math.min(totalBalance, Math.max(minUsdt, totalBalance * (pct / 100)));
+}
+
 async function executeAITrade(analysis) {
   const exchange = state.activeExchange;
   if (!exchange) return;
@@ -1979,9 +2009,23 @@ async function executeAITrade(analysis) {
   }
 
   const price = toFiniteNumber(analysis.entry_price || analysis.currentPrice, 0);
-  const orderPercent = Math.min(10, Math.max(0.1, parseFloat(document.getElementById('bot-order-percent')?.value || 2)));
   const totalBalance = toFiniteNumber(state.totalBalance, 0);
-  const notional = totalBalance > 0 ? totalBalance * (orderPercent / 100) : 10;
+  const paperMode = isPaperMode();
+  const notional = getAIChosenNotional(analysis, totalBalance, exchange, paperMode);
+  const orderPercent = totalBalance > 0 ? (notional / totalBalance) * 100 : 0;
+
+  if (!paperMode && exchange === 'binance' && notional < 5) {
+    updateAutoTradeChecklist(analysis);
+    addLog('warning', `[AUTO-TRADE] Bloqueado: Binance exige mínimo de 5 USDT por operação real. Saldo/tamanho atual: ${formatUsd(notional)}`);
+    showToast('Binance exige mínimo de 5 USDT por operação real', 'warning');
+    return;
+  }
+
+  if (!paperMode && totalBalance > 0 && notional > totalBalance) {
+    updateAutoTradeChecklist(analysis);
+    addLog('warning', `[AUTO-TRADE] Bloqueado: ordem ${formatUsd(notional)} maior que saldo ${formatUsd(totalBalance)}`);
+    return;
+  }
 
   let quantity = 0;
   if (price > 0) {
@@ -2041,7 +2085,7 @@ async function executeAITrade(analysis) {
   }
 
   if (isPaperMode()) {
-    addLog('info', `[PAPER] Simulando ${side} ${order.quantity} ${symbol} | ${orderPercent}% do saldo | conf ${confidence}%`);
+    addLog('info', `[PAPER] Simulando ${side} ${order.quantity} ${symbol} | ${formatUsd(notional)} (${orderPercent.toFixed(2)}% do saldo) | conf ${confidence}%`);
     const result = openPaperPosition(analysis, order);
     updateAutoTradeChecklist(analysis, order, result);
     if (result.success) {
@@ -2056,7 +2100,7 @@ async function executeAITrade(analysis) {
     return;
   }
 
-  addLog('info', `[AUTO-TRADE] Executando ${side} ${order.quantity} ${symbol} | ${orderPercent}% do saldo | conf ${confidence}%`);
+  addLog('info', `[AUTO-TRADE] Executando ${side} ${order.quantity} ${symbol} | ${formatUsd(notional)} (${orderPercent.toFixed(2)}% do saldo) | conf ${confidence}%`);
 
   try {
     const result = await window.electronAPI.placeOrder(state.exchangeConfigs[exchange], order);
@@ -2553,9 +2597,12 @@ function parseLocalActions(text) {
   const actions = [];
   const symbolMatch = text.match(/\b([A-Z]{2,12}USDT)\b/i);
   const percentMatch = text.match(/(\d+(?:[.,]\d+)?)\s*%/);
-  const percent = percentMatch ? parseFloat(percentMatch[1].replace(',', '.')) : 2;
-  if (lower.includes('compr') || lower.includes('buy')) actions.push({ type: 'BUY', symbol: (symbolMatch?.[1] || 'BTCUSDT').toUpperCase(), percent, paper: lower.includes('paper') || !lower.includes('real'), reason: 'pedido direto do usuário' });
-  if (lower.includes('vend') || lower.includes('sell')) actions.push({ type: 'SELL', symbol: (symbolMatch?.[1] || 'BTCUSDT').toUpperCase(), percent, paper: lower.includes('paper') || !lower.includes('real'), reason: 'pedido direto do usuário' });
+  const usdtMatch = text.match(/(\d+(?:[.,]\d+)?)\s*(?:usdt|usd|d[oó]lares?)/i);
+  const percent = percentMatch ? parseFloat(percentMatch[1].replace(',', '.')) : null;
+  const orderUsdt = usdtMatch ? parseFloat(usdtMatch[1].replace(',', '.')) : null;
+  const size = { ...(percent ? { position_size_percent: percent } : {}), ...(orderUsdt ? { order_usdt: orderUsdt } : {}) };
+  if (lower.includes('compr') || lower.includes('buy')) actions.push({ type: 'BUY', symbol: (symbolMatch?.[1] || 'BTCUSDT').toUpperCase(), ...size, paper: lower.includes('paper') || !lower.includes('real'), reason: 'pedido direto do usuário' });
+  if (lower.includes('vend') || lower.includes('sell')) actions.push({ type: 'SELL', symbol: (symbolMatch?.[1] || 'BTCUSDT').toUpperCase(), ...size, paper: lower.includes('paper') || !lower.includes('real'), reason: 'pedido direto do usuário' });
   if (lower.includes('crie um bot') || lower.includes('criar bot')) actions.push({ type: 'CREATE_BOT', mode: lower.includes('ia') ? 'hybrid' : 'bot', paper: true, reason: 'pedido direto do usuário' });
   if (lower.includes('crie ia') || lower.includes('criar ia')) actions.push({ type: 'CREATE_AI', reason: 'pedido direto do usuário' });
   return actions;
@@ -2566,17 +2613,26 @@ async function executeAIChatAction(action, containerId = 'ai-chat-action-cards')
     const type = String(action.type || '').toUpperCase();
     if (['BUY', 'SELL'].includes(type)) {
       const symbol = String(action.symbol || 'BTCUSDT').toUpperCase();
-      const percent = Math.min(10, Math.max(0.1, Number(action.percent || 2)));
       const price = await getLatestPrice(symbol);
-      const qty = price ? (toFiniteNumber(state.totalBalance, 0) * percent / 100) / price : 0.001;
-      const analysis = { recommendation: type, symbol, confidence: 100, risk_level: 'MEDIUM', entry_price: price, execution: { shouldExecute: true, reason: action.reason || 'Ação do chat', newsAligned: true } };
+      const analysis = {
+        recommendation: type,
+        symbol,
+        confidence: 100,
+        risk_level: 'MEDIUM',
+        entry_price: price,
+        order_usdt: action.order_usdt || action.orderUsd || null,
+        position_size_percent: action.position_size_percent || action.percent || null,
+        execution: { shouldExecute: true, reason: action.reason || 'Ação do chat', newsAligned: true }
+      };
       const oldPaper = document.getElementById('bot-paper-mode')?.checked;
-      if (document.getElementById('bot-paper-mode')) document.getElementById('bot-paper-mode').checked = action.paper !== false && document.getElementById('chat-execution-mode')?.value !== 'real';
-      if (document.getElementById('bot-order-percent')) document.getElementById('bot-order-percent').value = percent;
-      if (document.getElementById('chat-execution-mode')?.value === 'confirm' && action.paper === false && !confirm(`Executar ordem REAL ${type} ${symbol} com ${percent}% do saldo?`)) return;
+      const executionMode = document.getElementById('chat-execution-mode')?.value;
+      const realMode = action.paper === false || executionMode === 'real';
+      if (document.getElementById('bot-paper-mode')) document.getElementById('bot-paper-mode').checked = !realMode;
+      const previewSize = analysis.order_usdt ? `${formatUsd(analysis.order_usdt)}` : analysis.position_size_percent ? `${analysis.position_size_percent}% do saldo` : 'tamanho automático da IA';
+      if (executionMode === 'confirm' && realMode && !confirm(`Executar ordem REAL ${type} ${symbol} com ${previewSize}?`)) return;
       await executeAITrade(analysis);
       if (document.getElementById('bot-paper-mode') && oldPaper !== undefined) document.getElementById('bot-paper-mode').checked = oldPaper;
-      addActionCard(containerId, `${type} ${symbol}`, `${action.paper === false ? 'Ordem real solicitada' : 'Paper trade'} usando ${percent}% do saldo.`, 'success');
+      addActionCard(containerId, `${type} ${symbol}`, `${realMode ? 'Ordem real solicitada' : 'Paper trade'} usando ${previewSize}.`, 'success');
       return;
     }
     if (type === 'CREATE_BOT') {
@@ -2908,9 +2964,9 @@ function dashboardAIButtonClick() {
 
 function openCreateAIModal() {
   const paperEl = document.getElementById('create-ai-paper');
-  const percentEl = document.getElementById('create-ai-order-percent');
+  const minEl = document.getElementById('create-ai-min-usdt');
   if (paperEl) paperEl.checked = document.getElementById('bot-paper-mode')?.checked !== false;
-  if (percentEl) percentEl.value = document.getElementById('bot-order-percent')?.value || '2';
+  if (minEl) minEl.value = localStorage.getItem('cryptoai-ai-min-order-usdt') || '5';
   updateCreateAISummary();
   const modal = document.getElementById('create-ai-modal');
   if (modal) modal.style.display = 'flex';
@@ -2933,7 +2989,7 @@ function updateCreateAISummary() {
   const maxTokens = document.getElementById('max-tokens')?.value || '2000';
   const exchange = state.activeExchange || 'Nenhuma corretora';
   const paperMode = document.getElementById('create-ai-paper')?.checked !== false;
-  const orderPercent = document.getElementById('create-ai-order-percent')?.value || '2';
+  const minOrderUsdt = document.getElementById('create-ai-min-usdt')?.value || '5';
   const warning = document.getElementById('create-ai-real-warning');
   if (warning) warning.style.display = paperMode ? 'none' : 'block';
   const cards = [
@@ -2944,7 +3000,7 @@ function updateCreateAISummary() {
     ['Intervalo', `${interval} min`],
     ['Auto-trade IA', autoTrade],
     ['Execução', paperMode ? 'Paper Trading / teste' : 'REAL na corretora'],
-    ['Ordem', `${orderPercent}% do saldo real`],
+    ['Tamanho', `IA escolhe automático (mín. ${minOrderUsdt} USDT)`],
     ['Max tokens', maxTokens],
     ['Risco máximo', state.riskConfig.maxRiskLevel || 'LOW']
   ];
@@ -2958,11 +3014,10 @@ function updateCreateAISummary() {
 
 async function createAndStartAI() {
   const paperMode = document.getElementById('create-ai-paper')?.checked !== false;
-  const orderPercent = document.getElementById('create-ai-order-percent')?.value || '2';
+  const minOrderUsdt = document.getElementById('create-ai-min-usdt')?.value || '5';
   const hiddenPaper = document.getElementById('bot-paper-mode');
-  const hiddenPercent = document.getElementById('bot-order-percent');
   if (hiddenPaper) hiddenPaper.checked = paperMode;
-  if (hiddenPercent) hiddenPercent.value = orderPercent;
+  localStorage.setItem('cryptoai-ai-min-order-usdt', String(Math.max(5, parseFloat(minOrderUsdt) || 5))); 
 
   const aiAutoTrade = document.getElementById('auto-trade')?.value || 'disabled';
   if (!paperMode && aiAutoTrade === 'enabled') {
@@ -2985,7 +3040,7 @@ async function createAndStartAI() {
   if (state.botRunning) stopBot();
   await startBot();
   showToast(`IA criada e iniciada (${paperMode ? 'Paper Trading' : 'Modo REAL'})`, 'success');
-  addLog('success', `IA criada pelo Dashboard usando ${state.activeAI} | execução: ${paperMode ? 'paper' : 'real'} | ordem ${orderPercent}% do saldo`);
+  addLog('success', `IA criada pelo Dashboard usando ${state.activeAI} | execução: ${paperMode ? 'paper' : 'real'} | tamanho: IA automático, mínimo ${Math.max(5, parseFloat(minOrderUsdt) || 5)} USDT`);
 }
 
 // ===== Dashboard Create Bot Modal =====

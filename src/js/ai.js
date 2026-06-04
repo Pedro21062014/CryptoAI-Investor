@@ -233,11 +233,15 @@ You MUST respond in JSON format:
   "entry_price": number or null,
   "target_price": number or null,
   "stop_loss": number or null,
-  "reasoning": "detailed explanation of why THIS coin is the best opportunity right now",
+  "order_usdt": number or null,
+  "position_size_percent": number or null,
+  "reasoning": "detailed explanation of why THIS coin is the best opportunity right now and why you chose this order size",
   "factors": ["factor1", "factor2", ...],
   "timeframe": "short|medium|long",
   "sentiment": "bullish|bearish|neutral"
-}`;
+}
+
+Sizing rules: choose the order size yourself based on confidence, risk, volatility and available balance. If trading on Binance, never choose less than 5 USDT per real operation. Use order_usdt for a fixed USDT amount or position_size_percent for percentage. If unsure, use 5-10 USDT for small balances and 1-5% for larger balances.`;
 
 
 function getLanguageInstruction(language) {
@@ -258,10 +262,10 @@ You can chat normally and you can request app actions.
 You can help with trading, risk, bots, automations, portfolio and settings.
 
 When you want the app to execute something, include an ACTION JSON block in your answer exactly like this:
-ACTION_JSON:{"actions":[{"type":"BUY|SELL|CREATE_BOT|CREATE_AI|START_BOT|STOP_BOT|SET_SETTING","symbol":"BTCUSDT","percent":2,"paper":true,"reason":"why"}]}
+ACTION_JSON:{"actions":[{"type":"BUY|SELL|CREATE_BOT|CREATE_AI|START_BOT|STOP_BOT|SET_SETTING","symbol":"BTCUSDT","order_usdt":5,"position_size_percent":null,"paper":true,"reason":"why"}]}
 
 Rules:
-- For BUY/SELL, always include symbol and percent. Default paper=true unless user explicitly asks real/live order.
+- For BUY/SELL, always include symbol and choose the size yourself using order_usdt or position_size_percent. On Binance real mode, order_usdt must be at least 5. Default paper=true unless user explicitly asks real/live order.
 - For CREATE_BOT use mode bot or hybrid, symbols, interval, cycleMinutes, confidence, paper, autoTrade.
 - For CREATE_AI use provider/model only if user asks; otherwise use current configured IA.
 - Always explain what you are doing in the selected language.
