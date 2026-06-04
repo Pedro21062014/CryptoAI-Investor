@@ -1182,6 +1182,88 @@ function clearBalanceHistory() {
   showToast('Histórico de saldo limpo', 'success');
 }
 
+
+// ===== Auto-Trade Checklist =====
+function getCurrentBotSymbol() {
+  let symbol = document.getElementById('bot-symbol')?.value || 'BTCUSDT';
+  if (symbol === 'custom') symbol = document.getElementById('bot-symbol-custom')?.value?.trim()?.toUpperCase() || 'BTCUSDT';
+  return symbol;
+}
+
+function getRiskRank(level) {
+  return { LOW: 1, MEDIUM: 2, HIGH: 3, EXTREME: 4 }[String(level || 'MEDIUM').toUpperCase()] || 2;
+}
+
+function buildAutoTradeChecklist(analysis = {}, order = null, result = null) {
+  const exchange = state.activeExchange;
+  const exchangeConfig = exchange ? state.exchangeConfigs[exchange] : null;
+  const autoTrade = document.getElementById('bot-auto-trade')?.checked || false;
+  const minConfidence = parseFloat(document.getElementById('bot-min-confidence')?.value || 72);
+  const confidence = toFiniteNumber(analysis.confidence, 0);
+  const requiresAI = botState.mode === 'ai' || botState.mode === 'hybrid';
+  const maxRiskRank = getRiskRank(state.riskConfig.maxRiskLevel || 'LOW');
+  const analysisRiskRank = getRiskRank(analysis.risk_level || 'MEDIUM');
+  const newsAligned = analysis.execution?.newsAligned !== false;
+  const symbol = analysis.symbol || getCurrentBotSymbol();
+  const quantity = toFiniteNumber(order?.quantity, 0);
+  const balance = toFiniteNumber(state.totalBalance, 0);
+  const isBinanceMarket = exchange === 'binance' && String(order?.type || 'Market').toUpperCase() === 'MARKET';
+  const orderKeys = order ? Object.keys(order).filter(k => order[k] !== undefined && order[k] !== null && order[k] !== '') : [];
+  const allowedBinanceMarketKeys = ['symbol', 'side', 'type', 'quantity'];
+  const hasOnlyAllowedBinanceKeys = !order || !isBinanceMarket || orderKeys.every(k => allowedBinanceMarketKeys.includes(k));
+
+  const checks = [
+    { id: 'autoTrade', label: 'Auto-trade ativado', ok: autoTrade, detail: autoTrade ? 'Ativado' : 'Desativado' },
+    { id: 'exchange', label: 'Corretora conectada', ok: !!exchange && !!exchangeConfig, detail: exchange || 'Nenhuma corretora ativa' },
+    { id: 'apiKeys', label: 'API key carregada', ok: !!(exchangeConfig?.apiKey && exchangeConfig?.apiSecret), detail: exchangeConfig?.apiKey ? 'Credenciais presentes' : 'Credenciais ausentes' },
+    { id: 'ai', label: 'IA necessária conectada', ok: !requiresAI || !!(state.activeAI && state.aiConfigs[state.activeAI]?.apiKey), detail: requiresAI ? (state.activeAI || 'IA ausente') : 'Modo Bot não exige IA' },
+    { id: 'signal', label: 'Sinal operacional', ok: ['BUY', 'SELL'].includes(analysis.recommendation), detail: analysis.recommendation || 'Sem análise' },
+    { id: 'confidence', label: 'Confiança mínima', ok: confidence >= minConfidence, detail: `${confidence}% / mínimo ${minConfidence}%` },
+    { id: 'risk', label: 'Risco permitido', ok: analysisRiskRank <= maxRiskRank, detail: `${analysis.risk_level || 'MEDIUM'} / máximo ${state.riskConfig.maxRiskLevel || 'LOW'}` },
+    { id: 'news', label: 'Notícias alinhadas', ok: newsAligned, detail: analysis.execution?.reason || (newsAligned ? 'OK' : 'Notícias divergentes') },
+    { id: 'balance', label: 'Saldo disponível', ok: balance > 0, detail: formatUsd(balance) },
+    { id: 'symbol', label: 'Par definido', ok: !!symbol && /^[A-Z0-9]+$/.test(symbol), detail: symbol || 'Indefinido' },
+    { id: 'quantity', label: 'Quantidade calculada', ok: !order || quantity > 0, detail: order ? String(order.quantity) : 'Aguardando ordem' },
+    { id: 'binanceParams', label: 'Parâmetros Binance MARKET limpos', ok: hasOnlyAllowedBinanceKeys, detail: order ? orderKeys.join(', ') : 'Aguardando ordem' }
+  ];
+
+  if (result) {
+    checks.push({ id: 'exchangeResult', label: 'Resposta da corretora', ok: !!result.success, detail: result.success ? 'Ordem aceita' : (result.error || 'Ordem rejeitada') });
+  }
+
+  const passed = checks.filter(c => c.ok).length;
+  const total = checks.length;
+  const allOk = checks.every(c => c.ok);
+  return { checks, passed, total, allOk, updatedAt: new Date().toISOString(), recommendation: analysis.recommendation || 'HOLD', symbol };
+}
+
+function updateAutoTradeChecklist(analysis = {}, order = null, result = null) {
+  const checklist = buildAutoTradeChecklist(analysis, order, result);
+  botState.lastChecklist = checklist;
+  const body = document.getElementById('autotrade-checklist-body');
+  const badge = document.getElementById('autotrade-checklist-badge');
+  if (badge) {
+    badge.textContent = `${checklist.passed}/${checklist.total}`;
+    badge.className = `badge ${checklist.allOk ? 'success' : 'warning'}`;
+  }
+  if (!body) return checklist;
+  body.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;">
+      ${checklist.checks.map(check => `
+        <div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:rgba(255,255,255,0.03);">
+          <span style="width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;background:${check.ok ? 'rgba(16,185,129,.16)' : 'rgba(245,158,11,.16)'};color:${check.ok ? 'var(--accent-green)' : 'var(--accent-orange)'};">${check.ok ? '✓' : '!'}</span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--text-primary);">${check.label}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:3px;word-break:break-word;">${check.detail || ''}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    <div style="font-size:11px;color:var(--text-muted);margin-top:10px;">Última atualização: ${new Date(checklist.updatedAt).toLocaleString('pt-BR')} | ${checklist.symbol}</div>
+  `;
+  return checklist;
+}
+
 // ===== Trading =====
 let currentTradeSide = 'BUY';
 
@@ -1277,15 +1359,18 @@ async function executeAITrade(analysis) {
   const executionGate = analysis.execution;
 
   if (executionGate && !executionGate.shouldExecute) {
+    updateAutoTradeChecklist(analysis);
     addLog('warning', `[AUTO-TRADE] Bloqueado: ${executionGate.reason}`);
     showToast(`Auto-trade bloqueado: ${executionGate.reason}`, 'warning');
     return;
   }
   if (confidence < minConfidence) {
+    updateAutoTradeChecklist(analysis);
     addLog('warning', `[AUTO-TRADE] Bloqueado: confiança ${confidence}% < ${minConfidence}%`);
     return;
   }
   if (['HIGH', 'EXTREME'].includes(analysis.risk_level) && state.riskConfig.maxRiskLevel !== 'HIGH' && state.riskConfig.maxRiskLevel !== 'EXTREME') {
+    updateAutoTradeChecklist(analysis);
     addLog('warning', `[AUTO-TRADE] Bloqueado por risco ${analysis.risk_level}`);
     return;
   }
@@ -1310,6 +1395,7 @@ async function executeAITrade(analysis) {
   else quantity = Number(quantity.toFixed(3));
 
   if (!quantity || quantity <= 0) {
+    updateAutoTradeChecklist(analysis);
     addLog('warning', '[AUTO-TRADE] Quantidade calculada invalida; ordem cancelada');
     return;
   }
@@ -1329,6 +1415,8 @@ async function executeAITrade(analysis) {
     order.takeProfit = analysis.target_price || undefined;
   }
 
+  updateAutoTradeChecklist(analysis, order);
+
   try {
     const validation = await window.electronAPI.validateTrade(
       state.riskConfig,
@@ -1336,6 +1424,7 @@ async function executeAITrade(analysis) {
       { totalValue: totalBalance || 1000, todayTrades: state.trades.length }
     );
     if (!validation.valid) {
+      updateAutoTradeChecklist({ ...analysis, execution: { ...(analysis.execution || {}), shouldExecute: false, reason: validation.errors.join(', ') } }, order);
       addLog('error', `[AUTO-TRADE] Bloqueado pelo risco: ${validation.errors.join(', ')}`);
       showToast(`Trade bloqueado: ${validation.errors.join(', ')}`, 'error');
       return;
@@ -1352,6 +1441,7 @@ async function executeAITrade(analysis) {
 
   try {
     const result = await window.electronAPI.placeOrder(state.exchangeConfigs[exchange], order);
+    updateAutoTradeChecklist(analysis, order, result);
     if (result.success) {
       showToast(`Auto-trade executado: ${side} ${order.quantity} ${symbol}`, 'success');
       addLog('success', `[AUTO-TRADE] ${side} ${order.quantity} ${symbol} executado`);
@@ -1840,7 +1930,8 @@ const botState = {
   running: false,
   interval: null,
   signals: [],
-  analysisCount: 0
+  analysisCount: 0,
+  lastChecklist: null
 };
 
 // Load bot install state from cache
@@ -2183,6 +2274,7 @@ async function runCryptoBotCycle(force = false) {
     }
 
     if (finalAnalysis) {
+      updateAutoTradeChecklist(finalAnalysis);
       displayBotAnalysis(finalAnalysis);
       botState.analysisCount++;
       addBotSignal(finalAnalysis);
