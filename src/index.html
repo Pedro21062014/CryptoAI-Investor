@@ -1382,23 +1382,23 @@
       <div class="page-header">
         <h1>Posições</h1>
         <div class="header-actions" style="display:flex;gap:10px;align-items:center;">
-          <span class="badge info" id="paper-mode-badge">Paper Trading</span>
+          <span class="badge success" id="paper-mode-badge">Saldo Real</span>
           <button class="btn btn-outline" onclick="resetPaperTrading()">Resetar Simulação</button>
-          <button class="btn btn-primary" onclick="updatePositionsUI()">Atualizar</button>
+          <button class="btn btn-primary" onclick="refreshAllBalances()">Atualizar Saldos Reais</button>
         </div>
       </div>
       <div class="stats-grid">
-        <div class="stat-card"><div class="stat-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div class="stat-info"><span class="stat-label">Equity Paper</span><span class="stat-value" id="paper-equity">$10,000.00</span></div></div>
-        <div class="stat-card"><div class="stat-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/></svg></div><div class="stat-info"><span class="stat-label">P&L Aberto</span><span class="stat-value" id="paper-open-pnl">$0.00</span></div></div>
+        <div class="stat-card"><div class="stat-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div><div class="stat-info"><span class="stat-label">Saldo Real</span><span class="stat-value" id="paper-equity">$0.00</span></div></div>
+        <div class="stat-card"><div class="stat-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/></svg></div><div class="stat-info"><span class="stat-label">Valor em Criptos</span><span class="stat-value" id="paper-open-pnl">$0.00</span></div></div>
         <div class="stat-card"><div class="stat-icon purple"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/></svg></div><div class="stat-info"><span class="stat-label">Posições</span><span class="stat-value" id="positions-count">0</span></div></div>
-        <div class="stat-card"><div class="stat-icon orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div class="stat-info"><span class="stat-label">P&L Realizado</span><span class="stat-value" id="paper-realized-pnl">$0.00</span></div></div>
+        <div class="stat-card"><div class="stat-icon orange"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div><div class="stat-info"><span class="stat-label">Saldo Stable</span><span class="stat-value" id="paper-realized-pnl">$0.00</span></div></div>
       </div>
       <div class="card card-full" style="margin-top:16px;">
-        <div class="card-header"><h3>Posições Abertas</h3></div>
-        <div class="card-body"><table class="data-table"><thead><tr><th>Par</th><th>Lado</th><th>Qtd</th><th>Entrada</th><th>Atual</th><th>P&L</th><th>Conf</th><th>Ações</th></tr></thead><tbody id="positions-tbody"><tr><td colspan="8" class="empty-row">Nenhuma posição aberta</td></tr></tbody></table></div>
+        <div class="card-header"><h3>Posições Reais / Saldos da Corretora</h3><span class="badge info" id="positions-source-badge">API Real</span></div>
+        <div class="card-body"><table class="data-table"><thead><tr><th>Moeda</th><th>Carteira</th><th>Quantidade</th><th>Disponível</th><th>Bloqueado</th><th>Valor USD</th><th>% Carteira</th><th>Status</th></tr></thead><tbody id="positions-tbody"><tr><td colspan="8" class="empty-row">Nenhum saldo real carregado</td></tr></tbody></table></div>
       </div>
       <div class="card card-full" style="margin-top:16px;">
-        <div class="card-header"><h3>Histórico Paper Trading</h3></div>
+        <div class="card-header"><h3>Histórico Paper Trading / Simulação</h3><span class="badge warning">Simulado</span></div>
         <div class="card-body" id="paper-history-body" style="max-height:360px;overflow-y:auto;"><div class="empty-state"><p>Nenhum trade simulado ainda</p></div></div>
       </div>
     </div>

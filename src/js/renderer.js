@@ -355,6 +355,7 @@ async function loadBalance(exchange) {
       state.balanceDetails = normalizedBalance;
       recordBalanceSnapshot(exchange, totalUsd, normalizedBalance);
       updateWalletUI(result.exchange || exchange);
+      updatePositionsUI();
 
       const balanceEl = document.getElementById('total-balance');
       if (balanceEl) balanceEl.textContent = formatUsd(totalUsd);
@@ -1282,30 +1283,71 @@ async function refreshPaperPrices() {
   savePaperTrading();
 }
 
+
+function isStableCoinSymbol(coin) {
+  return ['USDT', 'USDC', 'BUSD', 'TUSD', 'USD', 'DAI', 'FDUSD', 'PYUSD', 'USDP'].includes(String(coin || '').toUpperCase());
+}
+
+function getRealPortfolioPositions() {
+  return (state.balanceDetails || [])
+    .map(normalizeBalanceItem)
+    .filter(c => (toFiniteNumber(c.walletBalance, 0) > 0 || toFiniteNumber(c.usdValue, 0) > 0))
+    .sort((a, b) => toFiniteNumber(b.usdValue, 0) - toFiniteNumber(a.usdValue, 0));
+}
+
 async function updatePositionsUI() {
-  await refreshPaperPrices();
-  const openPnl = state.paperTrading.positions.reduce((sum, p) => sum + calculatePositionPnl(p), 0);
-  const equity = state.paperTrading.cash + state.paperTrading.positions.reduce((sum, p) => sum + getPaperCurrentPrice(p) * p.quantity, 0);
   const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
-  setText('paper-equity', formatUsd(equity));
-  setText('paper-open-pnl', formatUsd(openPnl));
-  setText('paper-realized-pnl', formatUsd(state.paperTrading.realizedPnl || 0));
-  setText('positions-count', state.paperTrading.positions.length);
+  const realPositions = getRealPortfolioPositions();
+  const cryptoPositions = realPositions.filter(c => !isStableCoinSymbol(c.coin));
+  const stablePositions = realPositions.filter(c => isStableCoinSymbol(c.coin));
+  const cryptoValue = cryptoPositions.reduce((sum, c) => sum + toFiniteNumber(c.usdValue, 0), 0);
+  const stableValue = stablePositions.reduce((sum, c) => sum + toFiniteNumber(c.usdValue, 0), 0);
+  const realTotal = toFiniteNumber(state.totalBalance, 0) || realPositions.reduce((sum, c) => sum + toFiniteNumber(c.usdValue, 0), 0);
+
+  setText('paper-equity', formatUsd(realTotal));
+  setText('paper-open-pnl', formatUsd(cryptoValue));
+  setText('paper-realized-pnl', formatUsd(stableValue));
+  setText('positions-count', cryptoPositions.length);
+
   const badge = document.getElementById('paper-mode-badge');
-  if (badge) { badge.textContent = isPaperMode() ? 'Paper Trading ON' : 'Modo Real'; badge.className = isPaperMode() ? 'badge success' : 'badge error'; }
+  if (badge) {
+    badge.textContent = `Saldo Real${state.activeExchange ? ' - ' + state.activeExchange : ''}`;
+    badge.className = 'badge success';
+  }
+  const sourceBadge = document.getElementById('positions-source-badge');
+  if (sourceBadge) sourceBadge.textContent = state.activeExchange ? `API ${state.activeExchange}` : 'API Real';
 
   const tbody = document.getElementById('positions-tbody');
   if (tbody) {
-    if (!state.paperTrading.positions.length) tbody.innerHTML = '<tr><td colspan="8" class="empty-row">Nenhuma posição aberta</td></tr>';
-    else tbody.innerHTML = state.paperTrading.positions.map(p => {
-      const pnl = calculatePositionPnl(p);
-      return `<tr><td><strong>${p.symbol}</strong></td><td><span class="badge ${p.side === 'BUY' ? 'success' : 'error'}">${p.side}</span></td><td>${p.quantity}</td><td>$${toFiniteNumber(p.entryPrice,0).toLocaleString()}</td><td>$${getPaperCurrentPrice(p).toLocaleString()}</td><td style="color:${pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)'}">${formatUsd(pnl)}</td><td>${p.confidence}%</td><td><button class="btn btn-sm btn-outline" onclick="closePaperPosition(${p.id})">Fechar</button></td></tr>`;
-    }).join('');
+    if (!cryptoPositions.length) {
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-row">Nenhuma posição real em cripto carregada. Clique em Atualizar Saldos Reais.</td></tr>';
+    } else {
+      tbody.innerHTML = cryptoPositions.map(c => {
+        const usd = toFiniteNumber(c.usdValue, 0);
+        const pct = realTotal > 0 ? (usd / realTotal) * 100 : 0;
+        const wallets = Array.isArray(c.accountTypes) ? c.accountTypes.join(', ') : (state.activeExchange || '--');
+        return `<tr>
+          <td><strong>${c.coin}</strong></td>
+          <td>${wallets}</td>
+          <td style="font-family:var(--font-mono)">${toFiniteNumber(c.walletBalance, 0).toLocaleString('en-US', { maximumFractionDigits: 8 })}</td>
+          <td style="font-family:var(--font-mono)">${toFiniteNumber(c.free, 0).toLocaleString('en-US', { maximumFractionDigits: 8 })}</td>
+          <td style="font-family:var(--font-mono)">${toFiniteNumber(c.locked, 0).toLocaleString('en-US', { maximumFractionDigits: 8 })}</td>
+          <td style="font-family:var(--font-mono)">${formatUsd(usd)}</td>
+          <td>${pct.toFixed(2)}%</td>
+          <td><span class="badge success">Real</span></td>
+        </tr>`;
+      }).join('');
+    }
   }
+
+  // Mantém o histórico paper apenas como seção de simulação, separado do dinheiro real.
   const hist = document.getElementById('paper-history-body');
   if (hist) {
-    if (!state.paperTrading.history.length) hist.innerHTML = '<div class="empty-state"><p>Nenhum trade simulado ainda</p></div>';
-    else hist.innerHTML = state.paperTrading.history.slice(0, 80).map(h => `<div class="analysis-history-item"><div class="analysis-history-row"><div class="analysis-history-left"><span class="badge ${h.type === 'OPEN' ? 'success' : 'info'}">${h.type}</span><span class="analysis-history-symbol">${h.symbol}</span><span>${h.side}</span></div><div class="analysis-history-right"><span>${h.pnl !== undefined ? formatUsd(h.pnl) : formatUsd(h.notional || 0)}</span><span class="analysis-history-time">${new Date(h.closedAt || h.openedAt).toLocaleString('pt-BR')}</span></div></div></div>`).join('');
+    if (!state.paperTrading.history.length) {
+      hist.innerHTML = '<div class="empty-state"><p>Nenhum trade simulado ainda</p></div>';
+    } else {
+      hist.innerHTML = state.paperTrading.history.slice(0, 80).map(h => `<div class="analysis-history-item"><div class="analysis-history-row"><div class="analysis-history-left"><span class="badge ${h.type === 'OPEN' ? 'success' : 'info'}">${h.type}</span><span class="analysis-history-symbol">${h.symbol}</span><span>${h.side}</span></div><div class="analysis-history-right"><span>${h.pnl !== undefined ? formatUsd(h.pnl) : formatUsd(h.notional || 0)}</span><span class="analysis-history-time">${new Date(h.closedAt || h.openedAt).toLocaleString('pt-BR')}</span></div></div></div>`).join('');
+    }
   }
 }
 
