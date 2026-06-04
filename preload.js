@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadUpdate: () => ipcRenderer.invoke('updates:download'),
   installUpdate: () => ipcRenderer.invoke('updates:install'),
   getDownloadedUpdatePath: () => ipcRenderer.invoke('updates:get-downloaded-path'),
+  sendGatewayMessage: (channelId, channelConfig, text) => ipcRenderer.invoke('gateway:send-message', channelId, channelConfig, text),
   onUpdateDownloadProgress: (callback) => ipcRenderer.on('update:download-progress', (e, data) => callback(data)),
 
   // Window controls

@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const https = require('https');
 const { spawn } = require('child_process');
+const axios = require('axios');
 
 let mainWindow;
 let tray;
@@ -331,6 +332,47 @@ function setAutoStart(enabled) {
   });
 }
 
+
+async function sendGatewayMessage(channelId, channelConfig, text) {
+  const id = String(channelId || '').toLowerCase();
+  const cfg = channelConfig || {};
+  const message = String(text || '');
+  try {
+    if (id === 'telegram') {
+      if (!cfg.botToken || !cfg.chatId) {
+        return { success: false, error: 'Telegram precisa de Bot Token e Chat ID' };
+      }
+      const response = await axios.post(`https://api.telegram.org/bot${cfg.botToken}/sendMessage`, {
+        chat_id: cfg.chatId,
+        text: message,
+        disable_web_page_preview: true
+      }, { timeout: 30000 });
+      if (response.data?.ok === false) return { success: false, error: response.data.description || 'Telegram retornou erro' };
+      return { success: true, data: response.data };
+    }
+
+    if (!cfg.webhookUrl) {
+      return { success: false, error: `${id || 'gateway'} precisa de Webhook/API URL` };
+    }
+    const payload = {
+      text: message,
+      message,
+      app: 'CryptoAI Investor',
+      channel: id,
+      target: cfg.phone || cfg.roomId || cfg.groupId || cfg.to || '',
+      timestamp: new Date().toISOString()
+    };
+    const response = await axios.post(cfg.webhookUrl, payload, {
+      timeout: 30000,
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return { success: true, status: response.status, data: response.data };
+  } catch (err) {
+    const error = err.response?.data?.description || err.response?.data?.message || err.response?.data?.error || err.message;
+    return { success: false, error: typeof error === 'string' ? error : JSON.stringify(error) };
+  }
+}
+
 // IPC Handlers
 ipcMain.handle('get-app-path', () => app.getAppPath());
 ipcMain.handle('get-assets-path', () => path.join(app.getAppPath(), 'src', 'assets'));
@@ -358,6 +400,7 @@ ipcMain.handle('updates:check', async () => checkForUpdates());
 ipcMain.handle('updates:download', async (event) => downloadLatestUpdate(event));
 ipcMain.handle('updates:install', async () => installDownloadedUpdate());
 ipcMain.handle('updates:get-downloaded-path', () => ({ filePath: downloadedUpdatePath, exists: !!downloadedUpdatePath && fs.existsSync(downloadedUpdatePath) }));
+ipcMain.handle('gateway:send-message', async (e, channelId, channelConfig, text) => sendGatewayMessage(channelId, channelConfig, text));
 
 // Exchange API handlers
 const exchangeHandlers = require('./src/js/exchanges');

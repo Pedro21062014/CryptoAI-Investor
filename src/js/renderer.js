@@ -2496,17 +2496,17 @@ function loadSavedConfig() {
 
 // ===== Gateway Notifications =====
 const GATEWAY_CHANNELS = [
-  { id: 'telegram', name: 'Telegram', color: '#229ED9', icon: '✈', fields: [{ key: 'botToken', label: 'Bot Token' }, { key: 'chatId', label: 'Chat ID' }] },
-  { id: 'whatsapp', name: 'WhatsApp', color: '#25D366', icon: '☎', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'phone', label: 'Número/Grupo' }] },
-  { id: 'wechat', name: 'WeChat', color: '#07C160', icon: '💬', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'roomId', label: 'Room/User ID' }] },
-  { id: 'qq', name: 'QQ', color: '#12B7F5', icon: '🐧', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'groupId', label: 'Group/User ID' }] },
-  { id: 'discord', name: 'Discord', color: '#5865F2', icon: '☯', fields: [{ key: 'webhookUrl', label: 'Webhook URL' }] },
-  { id: 'email', name: 'E-mail', color: '#EA4335', icon: '✉', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'to', label: 'E-mail destino' }] },
-  { id: 'webhook', name: 'Webhook', color: '#F59E0B', icon: '{}', fields: [{ key: 'webhookUrl', label: 'URL do Webhook' }] }
+  { id: 'telegram', name: 'Telegram', color: '#229ED9', logo: 'assets/logos/gateway/telegram.svg', fields: [{ key: 'botToken', label: 'Bot Token' }, { key: 'chatId', label: 'Chat ID' }] },
+  { id: 'whatsapp', name: 'WhatsApp', color: '#25D366', logo: 'assets/logos/gateway/whatsapp.svg', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'phone', label: 'Número/Grupo' }] },
+  { id: 'wechat', name: 'WeChat', color: '#07C160', logo: 'assets/logos/gateway/wechat.svg', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'roomId', label: 'Room/User ID' }] },
+  { id: 'qq', name: 'QQ', color: '#12B7F5', logo: 'assets/logos/gateway/qq.svg', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'groupId', label: 'Group/User ID' }] },
+  { id: 'discord', name: 'Discord', color: '#5865F2', logo: 'assets/logos/gateway/discord.svg', fields: [{ key: 'webhookUrl', label: 'Webhook URL' }] },
+  { id: 'email', name: 'E-mail', color: '#EA4335', logo: 'assets/logos/gateway/email.svg', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'to', label: 'E-mail destino' }] },
+  { id: 'webhook', name: 'Webhook', color: '#F59E0B', logo: 'assets/logos/gateway/webhook.svg', fields: [{ key: 'webhookUrl', label: 'URL do Webhook' }] }
 ];
 
 function gatewayIcon(channel) {
-  return `<div style="width:46px;height:46px;border-radius:14px;background:${channel.color};display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:20px;box-shadow:0 10px 24px ${channel.color}44;">${channel.icon}</div>`;
+  return `<div style="width:52px;height:52px;border-radius:16px;background:${channel.color};display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px ${channel.color}44;overflow:hidden;"><img src="${channel.logo}" alt="${channel.name}" style="width:52px;height:52px;display:block;"></div>`;
 }
 
 function getGatewayConfig() {
@@ -2582,16 +2582,9 @@ async function sendGatewayToChannel(id, text) {
   const cfg = collectGatewayConfig();
   const ch = cfg.channels[id];
   if (!ch?.enabled) return { success: false, error: 'Canal desativado' };
-  if (id === 'telegram') {
-    if (!ch.botToken || !ch.chatId) throw new Error('Telegram precisa de Bot Token e Chat ID');
-    const url = `https://api.telegram.org/bot${ch.botToken}/sendMessage`;
-    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: ch.chatId, text }) });
-    return { success: true };
-  }
-  const url = ch.webhookUrl;
-  if (!url) throw new Error(`${id} precisa de Webhook/API URL`);
-  await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, message: text, app: 'CryptoAI Investor', channel: id, target: ch.phone || ch.roomId || ch.groupId || ch.to || '' }) });
-  return { success: true };
+  const result = await window.electronAPI.sendGatewayMessage(id, ch, text);
+  if (!result?.success) throw new Error(result?.error || 'Falha ao enviar mensagem');
+  return result;
 }
 
 async function testGatewayChannel(id) {
