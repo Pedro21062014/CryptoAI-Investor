@@ -105,7 +105,7 @@ function requestJson(url) {
       });
     });
     req.on('error', reject);
-    req.setTimeout(20000, () => req.destroy(new Error('Timeout ao verificar atualizacao')));
+    req.setTimeout(30000, () => req.destroy(new Error('Timeout ao verificar atualizacao')));
   });
 }
 

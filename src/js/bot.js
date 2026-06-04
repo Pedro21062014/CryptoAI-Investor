@@ -479,7 +479,7 @@ async function fetchMarketDataForBot(exchangeConfig, symbol, interval = '60') {
       url = `https://www.okx.com/api/v5/market/candles?instId=${symbol}&bar=${interval}`;
     }
 
-    const response = await axios.get(url, { headers, timeout: 10000 });
+    const response = await axios.get(url, { headers, timeout: 30000 });
     const data = response.data;
 
     // Normalize data into standard format

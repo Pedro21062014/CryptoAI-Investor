@@ -14,7 +14,7 @@ module.exports = {
     // CoinGecko trending
     try {
       const response = await axios.get(`${newsSources.coingecko}/search/trending`, {
-        timeout: 10000
+        timeout: 20000
       });
       if (response.data.coins) {
         response.data.coins.forEach(coin => {
@@ -35,7 +35,7 @@ module.exports = {
     // CryptoCompare news
     try {
       const response = await axios.get(`${newsSources.cryptoCompare}/v2/news/?lang=EN&sortOrder=popular`, {
-        timeout: 10000
+        timeout: 20000
       });
       if (response.data.Data) {
         response.data.Data.slice(0, 20).forEach(article => {
@@ -56,7 +56,7 @@ module.exports = {
     // CoinGecko market data
     try {
       const response = await axios.get(`${newsSources.coingecko}/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=20&page=1&sparkline=true&price_change_percentage=1h,24h,7d`, {
-        timeout: 10000
+        timeout: 20000
       });
       if (response.data) {
         response.data.forEach(coin => {
@@ -87,7 +87,7 @@ module.exports = {
     // Fear & Greed Index
     try {
       const response = await axios.get(`${newsSources.cryptoCompare}/ FearAndGreedIndex/`, {
-        timeout: 10000
+        timeout: 20000
       });
       if (response.data.Data) {
         const fgi = response.data.Data[0];
@@ -103,7 +103,7 @@ module.exports = {
     } catch (err) {
       // Fallback - try alternative API
       try {
-        const response = await axios.get('https://api.alternative.me/fng/?limit=1', { timeout: 10000 });
+        const response = await axios.get('https://api.alternative.me/fng/?limit=1', { timeout: 20000 });
         if (response.data.data) {
           const fgi = response.data.data[0];
           allNews.push({
@@ -127,7 +127,7 @@ module.exports = {
     let sentiment = { overall: 'neutral', score: 50, sources: {} };
 
     try {
-      const response = await axios.get(`${newsSources.coingecko}/global`, { timeout: 10000 });
+      const response = await axios.get(`${newsSources.coingecko}/global`, { timeout: 20000 });
       if (response.data.data) {
         const g = response.data.data;
         sentiment.sources.coingecko = {
@@ -149,7 +149,7 @@ module.exports = {
     }
 
     try {
-      const response = await axios.get('https://api.alternative.me/fng/?limit=1', { timeout: 10000 });
+      const response = await axios.get('https://api.alternative.me/fng/?limit=1', { timeout: 20000 });
       if (response.data.data) {
         const fgi = response.data.data[0];
         sentiment.sources.fearGreed = {

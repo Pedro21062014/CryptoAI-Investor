@@ -1,8 +1,9 @@
 const axios = require('axios');
 const crypto = require('crypto');
 
-// Evita que conexão/teste de API fique preso por muito tempo sem resposta.
-axios.defaults.timeout = 20000;
+// Timeout maior para evitar falhas falsas em testnet/APIs lentas.
+// Antes 20s podia estourar em Bybit Testnet, Binance ou OKX em horários lentos.
+axios.defaults.timeout = 60000;
 
 const STABLECOINS = new Set(['USDT', 'USDC', 'BUSD', 'TUSD', 'DAI', 'FDUSD', 'USD', 'USDP', 'PYUSD']);
 
@@ -57,8 +58,8 @@ const exchanges = {
     testnetUrl: 'https://api-testnet.bybit.com',
     demoUrl: 'https://api-demo.bybit.com',
 
-    sign(secret, timestamp, apiKey, params) {
-      const payload = timestamp + apiKey + '20000' + params;
+    sign(secret, timestamp, apiKey, params, recvWindow = '60000') {
+      const payload = timestamp + apiKey + recvWindow + params;
       return crypto.createHmac('sha256', secret).update(payload).digest('hex');
     },
 
@@ -99,7 +100,7 @@ const exchanges = {
               'X-BAPI-API-KEY': config.apiKey,
               'X-BAPI-TIMESTAMP': timestamp,
               'X-BAPI-SIGN': sign,
-              'X-BAPI-RECV-WINDOW': '20000'
+              'X-BAPI-RECV-WINDOW': '60000'
             }
           });
           if (response.data.retCode === 0) {
@@ -202,7 +203,7 @@ const exchanges = {
             'X-BAPI-API-KEY': config.apiKey,
             'X-BAPI-TIMESTAMP': timestamp,
             'X-BAPI-SIGN': sign,
-            'X-BAPI-RECV-WINDOW': '20000'
+            'X-BAPI-RECV-WINDOW': '60000'
           }
         });
       };
@@ -287,14 +288,14 @@ const exchanges = {
           timeInForce: 'GTC'
         };
         if (order.price) body.price = order.price.toString();
-        const payload = timestamp + config.apiKey + '20000' + JSON.stringify(body);
+        const payload = timestamp + config.apiKey + '60000' + JSON.stringify(body);
         const sign = crypto.createHmac('sha256', config.apiSecret).update(payload).digest('hex');
         const response = await axios.post(`${url}/v5/order/create`, body, {
           headers: {
             'X-BAPI-API-KEY': config.apiKey,
             'X-BAPI-TIMESTAMP': timestamp,
             'X-BAPI-SIGN': sign,
-            'X-BAPI-RECV-WINDOW': '20000',
+            'X-BAPI-RECV-WINDOW': '60000',
             'Content-Type': 'application/json'
           }
         });
