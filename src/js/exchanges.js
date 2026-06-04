@@ -477,7 +477,10 @@ const exchanges = {
 
     buildQueryString(params) {
       const keys = Object.keys(params).sort();
-      return keys.map(k => `${k}=${params[k]}`).join('&');
+      return keys
+        .filter(k => params[k] !== undefined && params[k] !== null && params[k] !== '')
+        .map(k => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+        .join('&');
     },
 
     getUrl(config) {
@@ -594,18 +597,27 @@ const exchanges = {
       try {
         const base = this.getUrl(config);
         const timestamp = Date.now();
+        const orderType = String(order.type || 'MARKET').toUpperCase();
         const params = {
-          symbol: order.symbol,
-          side: order.side,
-          type: order.type || 'MARKET',
+          symbol: String(order.symbol || '').toUpperCase(),
+          side: String(order.side || '').toUpperCase(),
+          type: orderType,
           quantity: order.quantity,
           timestamp: timestamp,
           recvWindow: 60000
         };
-        if (order.price) {
+
+        // Binance SPOT não aceita price/timeInForce em ordem MARKET.
+        // Enviar esses parâmetros causava: "Not all sent parameters were read".
+        if (orderType === 'LIMIT') {
           params.price = order.price;
-          params.timeInForce = 'GTC';
+          params.timeInForce = order.timeInForce || 'GTC';
         }
+
+        if (orderType === 'LIMIT' && !params.price) {
+          return { success: false, error: 'Binance: ordem LIMIT precisa de preço' };
+        }
+
         const queryString = this.buildQueryString(params);
         const signature = this.sign(config.apiSecret, queryString);
         const url = `${base}/api/v3/order?${queryString}&signature=${signature}`;
