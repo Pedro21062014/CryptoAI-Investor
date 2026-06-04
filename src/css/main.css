@@ -496,6 +496,66 @@ input, select, button { font-family: var(--font-primary); }
   padding-right: 32px;
 }
 
+
+/* ===== Global rounded field polish ===== */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+textarea,
+select {
+  width: 100%;
+  min-height: 42px;
+  padding: 10px 14px;
+  background: var(--bg-input) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 14px !important;
+  color: var(--text-primary) !important;
+  font-family: var(--font-primary);
+  font-size: 13px;
+  line-height: 1.4;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 84px;
+}
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent-cyan) !important;
+  box-shadow: 0 0 0 3px rgba(0,212,255,0.12), 0 8px 24px rgba(0,0,0,0.12);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: var(--input-bg-image) !important;
+  background-repeat: no-repeat !important;
+  background-position: right 12px center !important;
+  padding-right: 34px !important;
+}
+
+input[type="search"] {
+  border-radius: 999px !important;
+}
+
+.input-with-unit input {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.input-unit {
+  border-top-right-radius: 14px;
+  border-bottom-right-radius: 14px;
+}
+
 .temp-val {
   font-family: var(--font-mono);
   color: var(--accent-cyan);
