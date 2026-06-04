@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   testConnection: (config) => ipcRenderer.invoke('exchange:test-connection', config),
   getBalance: (config) => ipcRenderer.invoke('exchange:get-balance', config),
   getMarkets: (config) => ipcRenderer.invoke('exchange:get-markets', config),
+  getSymbolRules: (config, symbol) => ipcRenderer.invoke('exchange:get-symbol-rules', config, symbol),
   placeOrder: (config, order) => ipcRenderer.invoke('exchange:place-order', config, order),
   getOrderBook: (config, symbol) => ipcRenderer.invoke('exchange:get-orderbook', config, symbol),
   getCandlesticks: (config, symbol, interval) => ipcRenderer.invoke('exchange:get-candlesticks', config, symbol, interval),

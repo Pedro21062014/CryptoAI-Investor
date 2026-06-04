@@ -31,7 +31,8 @@ const state = {
   paperTrading: { cash: 10000, initialCash: 10000, positions: [], history: [], realizedPnl: 0 },
   balanceRefreshInterval: null,
   coinSelectorData: [],
-  coinSelectorSelected: new Set(['BTCUSDT', 'ETHUSDT', 'SOLUSDT'])
+  coinSelectorSelected: new Set(['BTCUSDT', 'ETHUSDT', 'SOLUSDT']),
+  tradeSymbolRules: null
 };
 
 // ===== Navigation =====
@@ -1669,9 +1670,12 @@ function updateAutoTradeChecklist(analysis = {}, order = null, result = null) {
 // ===== Simplified Trading UI =====
 function initTradingUI() {
   handleTradeCoinSelect();
+  document.getElementById('trade-exchange')?.addEventListener('change', updateTradingPairRules);
+  document.getElementById('trade-symbol')?.addEventListener('input', () => { updateTradeCoinPreview(); updateTradingPairRules(); });
   document.getElementById('trade-quantity')?.addEventListener('input', updateTradeEstimatedValue);
   document.getElementById('trade-price')?.addEventListener('input', updateTradeEstimatedValue);
-  document.getElementById('trade-type')?.addEventListener('change', updateTradeEstimatedValue);
+  document.getElementById('trade-type')?.addEventListener('change', () => { updateTradeEstimatedValue(); updateTradingPairRules(); });
+  setTimeout(updateTradingPairRules, 300);
 }
 
 function getTradeSymbol() {
@@ -1692,6 +1696,7 @@ function handleTradeCoinSelect() {
     input.value = select.value;
   }
   updateTradeCoinPreview();
+  updateTradingPairRules();
 }
 
 function updateTradeCoinPreview() {
@@ -1727,6 +1732,64 @@ function updateTradeEstimatedValue() {
   if (el) el.textContent = price > 0 && qty > 0 ? `Valor estimado: ${formatUsd(qty * price)} (${qty} ${getTradeSymbol().replace(/USDT$/, '')})` : 'Valor estimado: --';
 }
 
+
+function formatRuleNumber(value, fallback = '--') {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return fallback;
+  return n.toLocaleString('en-US', { maximumFractionDigits: 12 });
+}
+
+async function updateTradingPairRules() {
+  const el = document.getElementById('trade-min-rules');
+  const exchange = document.getElementById('trade-exchange')?.value || state.activeExchange;
+  const symbol = getTradeSymbol();
+  state.tradeSymbolRules = null;
+  if (!el) return;
+  if (!exchange || !state.exchangeConfigs[exchange]) {
+    el.textContent = 'Mínimo do par: selecione/conecte uma corretora para carregar regras reais.';
+    el.style.color = 'var(--accent-orange)';
+    return;
+  }
+  el.textContent = `Mínimo do par: consultando regras reais de ${exchange}...`;
+  el.style.color = 'var(--text-muted)';
+  try {
+    const result = await window.electronAPI.getSymbolRules(state.exchangeConfigs[exchange], symbol);
+    if (!result.success) throw new Error(result.error || 'regras indisponíveis');
+    state.tradeSymbolRules = result;
+    const minQty = formatRuleNumber(result.minQty || result.marketMinQty);
+    const step = result.marketStepSize || result.stepSize || '--';
+    const minNotional = result.minNotional ? `${formatUsd(result.minNotional)}` : '--';
+    const tick = result.tickSize || '--';
+    el.textContent = `Mínimo real: qtd ${minQty} | passo ${step} | valor mín. ${minNotional} | tick ${tick}`;
+    el.style.color = 'var(--accent-green)';
+
+    const qtyInput = document.getElementById('trade-quantity');
+    if (qtyInput) {
+      if (result.minQty || result.marketMinQty) qtyInput.min = result.minQty || result.marketMinQty;
+      if (result.marketStepSize || result.stepSize) qtyInput.step = result.marketStepSize || result.stepSize;
+    }
+  } catch (e) {
+    el.textContent = `Mínimo do par: não foi possível carregar regras (${e.message})`;
+    el.style.color = 'var(--accent-red)';
+  }
+}
+
+function adjustQuantityToLoadedRules(quantity, price) {
+  const rules = state.tradeSymbolRules;
+  if (!rules || !quantity) return quantity;
+  const step = Number(rules.marketStepSize || rules.stepSize || 0);
+  let q = Number(quantity);
+  if (step > 0) q = Math.floor((q + Number.EPSILON) / step) * step;
+  const minQty = Number(rules.marketMinQty || rules.minQty || 0);
+  if (minQty > 0 && q < minQty) q = minQty;
+  const minNotional = Number(rules.minNotional || 0);
+  if (minNotional > 0 && price > 0 && q * price < minNotional) {
+    q = Math.ceil((minNotional / price) / (step || 1)) * (step || 1);
+  }
+  const decimals = String(rules.marketStepSize || rules.stepSize || '0.001').split('.')[1]?.replace(/0+$/, '').length || 3;
+  return Number(q.toFixed(Math.min(12, decimals)));
+}
+
 function setTradeAmountPercent(percent) {
   const price = getTradePriceEstimate();
   if (!price) {
@@ -1744,6 +1807,7 @@ function setTradeAmountPercent(percent) {
   else if (symbol.includes('BTC')) qty = Number(qty.toFixed(6));
   else if (symbol.includes('ETH') || symbol.includes('BNB')) qty = Number(qty.toFixed(5));
   else qty = Number(qty.toFixed(3));
+  qty = adjustQuantityToLoadedRules(qty, price);
   document.getElementById('trade-quantity').value = qty;
   updateTradeEstimatedValue();
 }
@@ -1817,6 +1881,11 @@ async function executeTrade() {
     quantity: parseFloat(document.getElementById('trade-quantity')?.value || 0),
     price: document.getElementById('trade-price')?.value ? parseFloat(document.getElementById('trade-price').value) : null
   };
+
+  const estimatedPrice = getTradePriceEstimate();
+  order.quantity = adjustQuantityToLoadedRules(order.quantity, estimatedPrice);
+  document.getElementById('trade-quantity').value = order.quantity;
+  updateTradeEstimatedValue();
 
   if (order.quantity <= 0) {
     showToast('Quantidade deve ser maior que zero', 'error');

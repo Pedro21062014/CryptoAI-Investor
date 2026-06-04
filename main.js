@@ -364,6 +364,7 @@ const exchangeHandlers = require('./src/js/exchanges');
 ipcMain.handle('exchange:test-connection', async (e, config) => exchangeHandlers.testConnection(config));
 ipcMain.handle('exchange:get-balance', async (e, config) => exchangeHandlers.getBalance(config));
 ipcMain.handle('exchange:get-markets', async (e, config) => exchangeHandlers.getMarkets(config));
+ipcMain.handle('exchange:get-symbol-rules', async (e, config, symbol) => exchangeHandlers.getSymbolRules(config, symbol));
 ipcMain.handle('exchange:place-order', async (e, config, order) => exchangeHandlers.placeOrder(config, order));
 ipcMain.handle('exchange:get-orderbook', async (e, config, symbol) => exchangeHandlers.getOrderBook(config, symbol));
 ipcMain.handle('exchange:get-candlesticks', async (e, config, symbol, interval) => exchangeHandlers.getCandlesticks(config, symbol, interval));

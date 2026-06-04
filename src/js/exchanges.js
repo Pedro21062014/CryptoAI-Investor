@@ -265,6 +265,30 @@ const exchanges = {
       };
     },
 
+    async getSymbolRules(config, symbol) {
+      try {
+        const url = this.getUrl(config);
+        const response = await axios.get(`${url}/v5/market/instruments-info?category=linear&symbol=${String(symbol || '').toUpperCase()}`, { timeout: 30000 });
+        const item = response.data?.result?.list?.[0];
+        if (!item) return { success: false, error: `Bybit: par ${symbol} nao encontrado` };
+        const lot = item.lotSizeFilter || {};
+        const price = item.priceFilter || {};
+        return {
+          success: true,
+          exchange: 'bybit',
+          symbol: item.symbol,
+          minQty: Number(lot.minOrderQty || 0),
+          maxQty: Number(lot.maxOrderQty || 0),
+          stepSize: lot.qtyStep || '1',
+          tickSize: price.tickSize || '0.00000001',
+          minNotional: Number(lot.minNotionalValue || 0),
+          status: item.status || ''
+        };
+      } catch (err) {
+        return { success: false, error: err.response?.data?.retMsg || err.message };
+      }
+    },
+
     async getMarkets(config) {
       try {
         const url = this.getUrl(config);
@@ -414,6 +438,30 @@ const exchanges = {
           return { success: false, error: `OKX Demo Trading: ${errMsg}` };
         }
         return { success: false, error: `OKX: ${errMsg}` };
+      }
+    },
+
+    async getSymbolRules(config, symbol) {
+      try {
+        const instId = String(symbol || '').includes('-')
+          ? String(symbol || '').toUpperCase()
+          : String(symbol || '').toUpperCase().replace(/USDT$/, '-USDT');
+        const response = await axios.get(`${this.baseUrl}/api/v5/public/instruments?instType=SPOT&instId=${instId}`, { timeout: 30000 });
+        const item = response.data?.data?.[0];
+        if (!item) return { success: false, error: `OKX: par ${symbol} nao encontrado` };
+        return {
+          success: true,
+          exchange: 'okx',
+          symbol: item.instId,
+          minQty: Number(item.minSz || 0),
+          maxQty: 0,
+          stepSize: item.lotSz || '1',
+          tickSize: item.tickSz || '0.00000001',
+          minNotional: Number(item.minSz || 0),
+          status: item.state || ''
+        };
+      } catch (err) {
+        return { success: false, error: err.response?.data?.msg || err.message };
       }
     },
 
@@ -851,6 +899,18 @@ module.exports = {
     const ex = exchanges[config.exchange];
     if (!ex) return Promise.resolve({ success: false, error: 'Exchange not supported' });
     return ex.getMarkets(config);
+  },
+
+  async getSymbolRules(config, symbol) {
+    const ex = exchanges[config.exchange];
+    if (!ex || !ex.getSymbolRules) return { success: false, error: 'Symbol rules not supported for this exchange' };
+    try {
+      const rules = await ex.getSymbolRules(config, symbol);
+      if (rules?.success !== undefined) return rules;
+      return { success: true, exchange: config.exchange, ...rules };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
   },
 
   placeOrder(config, order) {
