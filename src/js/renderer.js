@@ -61,6 +61,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTradingUI();
   loadGatewayConfig();
   loadAIAutomations();
+  loadAILearning();
   syncChatModels();
   ['create-ai-paper', 'create-ai-min-usdt'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateAISummary));
   ['create-bot-symbol','create-bot-interval','create-bot-cycle','create-bot-confidence','create-bot-order-percent','create-bot-symbol-list','create-bot-paper','create-bot-multi','create-bot-news','create-bot-news-align','create-bot-autotrade'].forEach(id => document.getElementById(id)?.addEventListener('change', updateCreateBotSummary));
@@ -946,7 +947,7 @@ async function runAnalysisCycle() {
     const analysisResult = await window.electronAPI.aiGetAnalysis(
       aiConfig,
       marketData,
-      { news: newsData, sentiment }
+      { news: newsData, sentiment, learning: getAILearningContext() }
     );
 
     if (analysisResult.success) {
@@ -2009,6 +2010,12 @@ async function executeAITrade(analysis) {
 
   const side = analysis.recommendation === 'BUY' ? 'BUY' : 'SELL';
   const symbol = analysis.symbol || 'BTCUSDT';
+  const learnedBlock = isSymbolBlockedByLearning(exchange, symbol);
+  if (learnedBlock.blocked) {
+    updateAutoTradeChecklist({ ...analysis, execution: { ...(analysis.execution || {}), shouldExecute: false, reason: `Aprendizado: evitar ${symbol} até ${new Date(learnedBlock.blockedUntil).toLocaleString('pt-BR')} (${learnedBlock.reason})` } });
+    addLog('warning', `[APRENDIZADO] Ordem bloqueada: IA já aprendeu a evitar ${symbol} em ${exchange}. Motivo: ${learnedBlock.reason}`);
+    return;
+  }
   const confidence = toFiniteNumber(analysis.confidence, 0);
   const minConfidence = parseFloat(document.getElementById('bot-min-confidence')?.value || 72);
   const executionGate = analysis.execution;
@@ -2032,6 +2039,7 @@ async function executeAITrade(analysis) {
 
   const symbolCheck = await validateSymbolForExecution(exchange, symbol);
   if (!symbolCheck.ok) {
+    learnSymbolFailure(exchange, symbol, symbolCheck.reason, 48);
     updateAutoTradeChecklist({ ...analysis, execution: { ...(analysis.execution || {}), shouldExecute: false, reason: symbolCheck.reason } });
     addLog('warning', `[AUTO-TRADE] Bloqueado: ${symbolCheck.reason}`);
     showToast(`Auto-trade bloqueado: ${symbolCheck.reason}`, 'warning');
@@ -2151,8 +2159,10 @@ async function executeAITrade(analysis) {
       saveConfig();
       setTimeout(() => loadBalance(exchange), 3000);
     } else {
-      addLog('error', `[AUTO-TRADE] Falha: ${result.error || JSON.stringify(result.data || {})}`);
-      showToast(`Falha no auto-trade: ${result.error || 'erro da corretora'}`, 'error');
+      const failReason = result.error || JSON.stringify(result.data || {});
+      learnSymbolFailure(exchange, symbol, failReason, 24);
+      addLog('error', `[AUTO-TRADE] Falha: ${failReason}`);
+      showToast(`Falha no auto-trade: ${failReason || 'erro da corretora'}`, 'error');
     }
   } catch (err) {
     addLog('error', `[AUTO-TRADE] Exceção: ${err.message}`);
@@ -2574,6 +2584,92 @@ function loadSavedConfig() {
 
 
 
+
+// ===== AI Learning Memory =====
+function loadAILearning() {
+  try {
+    const saved = localStorage.getItem('cryptoai-ai-learning');
+    if (saved) state.aiLearning = { ...state.aiLearning, ...JSON.parse(saved) };
+  } catch (e) {}
+  updateAILearningUI();
+}
+
+function saveAILearning() {
+  try { localStorage.setItem('cryptoai-ai-learning', JSON.stringify(state.aiLearning)); } catch (e) {}
+}
+
+function getLearningKey(exchange, symbol) {
+  return `${exchange || 'unknown'}:${String(symbol || '').toUpperCase()}`;
+}
+
+function learnSymbolFailure(exchange, symbol, reason, cooldownHours = 24) {
+  if (!symbol) return;
+  const key = getLearningKey(exchange, symbol);
+  const now = Date.now();
+  const current = state.aiLearning.blockedSymbols[key] || { failures: 0 };
+  const failures = (current.failures || 0) + 1;
+  const hours = Math.min(168, cooldownHours * failures);
+  state.aiLearning.blockedSymbols[key] = {
+    exchange,
+    symbol: String(symbol).toUpperCase(),
+    reason: reason || 'Falha desconhecida',
+    failures,
+    blockedUntil: new Date(now + hours * 60 * 60 * 1000).toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  state.aiLearning.events.unshift({ type: 'FAILURE', exchange, symbol: String(symbol).toUpperCase(), reason, timestamp: new Date().toISOString() });
+  state.aiLearning.events = state.aiLearning.events.slice(0, 120);
+  saveAILearning();
+  updateAILearningUI();
+  addLog('warning', `[APRENDIZADO] IA aprendeu a evitar ${symbol} em ${exchange}: ${reason}`);
+}
+
+function clearExpiredLearning() {
+  const now = Date.now();
+  Object.keys(state.aiLearning.blockedSymbols || {}).forEach(key => {
+    const item = state.aiLearning.blockedSymbols[key];
+    if (item.blockedUntil && new Date(item.blockedUntil).getTime() < now) delete state.aiLearning.blockedSymbols[key];
+  });
+}
+
+function isSymbolBlockedByLearning(exchange, symbol) {
+  clearExpiredLearning();
+  const item = state.aiLearning.blockedSymbols[getLearningKey(exchange, symbol)];
+  if (!item) return { blocked: false };
+  return { blocked: true, ...item };
+}
+
+function getAILearningContext() {
+  clearExpiredLearning();
+  const blocked = Object.values(state.aiLearning.blockedSymbols || {});
+  return {
+    blockedSymbols: blocked.map(b => ({ exchange: b.exchange, symbol: b.symbol, reason: b.reason, blockedUntil: b.blockedUntil, failures: b.failures })),
+    instruction: blocked.length
+      ? `Avoid these symbols because previous attempts failed: ${blocked.map(b => `${b.symbol} on ${b.exchange} (${b.reason})`).join('; ')}`
+      : 'No blocked symbols learned yet.'
+  };
+}
+
+function updateAILearningUI() {
+  const el = document.getElementById('ai-learning-line');
+  if (!el) return;
+  clearExpiredLearning();
+  const blocked = Object.values(state.aiLearning.blockedSymbols || {});
+  if (!blocked.length) {
+    el.innerHTML = '<div class="empty-state"><p>A IA ainda não aprendeu bloqueios. Quando uma moeda falhar, ela será evitada automaticamente.</p></div>';
+    return;
+  }
+  el.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;">${blocked.map(b => `<div style="padding:10px 12px;border:1px solid var(--border-color);border-left:4px solid var(--accent-orange);border-radius:var(--radius-sm);background:rgba(255,255,255,.035);"><strong>${b.symbol}</strong> <span class="badge warning">evitar</span><div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${b.exchange} • ${b.reason}</div><div style="font-size:11px;color:var(--text-muted);">até ${new Date(b.blockedUntil).toLocaleString('pt-BR')}</div></div>`).join('')}</div>`;
+}
+
+function clearAILearning() {
+  if (!confirm('Limpar memória de aprendizado da IA?')) return;
+  state.aiLearning = { blockedSymbols: {}, events: [] };
+  saveAILearning();
+  updateAILearningUI();
+  showToast('Aprendizado da IA limpo', 'success');
+}
+
 // ===== AI Chat Turbo & Automations =====
 function getChatAIConfig() {
   let provider = document.getElementById('chat-ai-provider')?.value || 'active';
@@ -2694,7 +2790,7 @@ async function sendAIChatMessage() {
   const cfg = getChatAIConfig();
   if (!cfg) { addChatMessage('assistant', 'Configure uma IA na aba IA Config primeiro.'); return; }
   addChatMessage('assistant', 'Pensando...');
-  const context = { balance: state.totalBalance, exchange: state.activeExchange, positions: state.balanceDetails, paperMode: isPaperMode(), automations: state.aiAutomations };
+  const context = { balance: state.totalBalance, exchange: state.activeExchange, positions: state.balanceDetails, paperMode: isPaperMode(), automations: state.aiAutomations, learning: getAILearningContext() };
   const messages = state.aiChatMessages.filter(m => m.content !== 'Pensando...').slice(-12).map(m => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content }));
   const res = await window.electronAPI.aiChat(cfg, messages, context);
   state.aiChatMessages = state.aiChatMessages.filter(m => m.content !== 'Pensando...');
@@ -2743,7 +2839,7 @@ async function runAIAutomation(id) {
   if (!a || !a.enabled) return;
   const cfg = getChatAIConfig();
   if (!cfg) { addActionCard('automation-action-cards', 'Automação falhou', 'IA não configurada', 'error'); return; }
-  const res = await window.electronAPI.aiChat(cfg, [{ role: 'user', content: a.prompt }], { automation: a, balance: state.totalBalance, exchange: state.activeExchange });
+  const res = await window.electronAPI.aiChat(cfg, [{ role: 'user', content: a.prompt }], { automation: a, balance: state.totalBalance, exchange: state.activeExchange, learning: getAILearningContext() });
   a.lastRun = new Date().toISOString();
   saveAIAutomations(); renderAIAutomations();
   if (!res.success) { addActionCard('automation-action-cards', a.name, res.error, 'error'); return; }
@@ -3503,7 +3599,7 @@ async function runCryptoBotCycle(force = false) {
       );
       if (candleResult.success) marketData[symbol] = candleResult.data;
 
-      aiResult = await window.electronAPI.aiGetAnalysis(aiConfig, marketData, { news: newsData, sentiment });
+      aiResult = await window.electronAPI.aiGetAnalysis(aiConfig, marketData, { news: newsData, sentiment, learning: getAILearningContext() });
       if (aiResult?.success && aiResult.analysis) {
         aiResult.analysis.execution = {
           shouldExecute: ['BUY', 'SELL'].includes(aiResult.analysis.recommendation) && (aiResult.analysis.confidence || 0) >= minConfidence,

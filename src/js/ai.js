@@ -362,8 +362,10 @@ IMPORTANT: You must scan ALL available cryptocurrency pairs and recommend the BE
 MARKET DATA:
 ${JSON.stringify(marketData, null, 2)}
 
-NEWS & SENTIMENT:
+NEWS, SENTIMENT & LEARNING MEMORY:
 ${JSON.stringify(newsData, null, 2)}
+
+If learning.blockedSymbols contains symbols, do NOT recommend those symbols until their blockedUntil time expires. Treat previous failed symbols as temporarily banned.
 
 RISK PARAMETERS:
 - Max Risk Level: ${config.maxRiskLevel || 'MEDIUM'}
