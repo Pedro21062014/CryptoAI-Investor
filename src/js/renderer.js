@@ -2093,6 +2093,12 @@ async function executeAITrade(analysis) {
     quantity: quantity
   };
 
+  // Binance BUY MARKET usa quoteOrderQty para garantir mínimo em USDT real
+  // mesmo quando o preço da análise está desatualizado.
+  if (exchange === 'binance' && side === 'BUY') {
+    order.quoteOrderQty = Number(notional.toFixed(8));
+  }
+
   // Binance MARKET rejeita parâmetros extras. Stop/take/price ficam apenas para validação/log,
   // não são enviados na ordem market.
   if (exchange !== 'binance') {
@@ -2145,9 +2151,10 @@ async function executeAITrade(analysis) {
     const result = await window.electronAPI.placeOrder(state.exchangeConfigs[exchange], order);
     updateAutoTradeChecklist(analysis, order, result);
     if (result.success) {
-      const executedQty = result.normalizedOrder?.quantity || order.quantity;
+      const executedQty = result.data?.executedQty || result.normalizedOrder?.quantity || order.quantity;
+      const executedValue = result.data?.cummulativeQuoteQty || result.normalizedOrder?.quoteOrderQty || notional;
       showToast(`Auto-trade executado: ${side} ${executedQty} ${symbol}`, 'success');
-      addLog('success', `[AUTO-TRADE] ${side} ${executedQty} ${symbol} executado`);
+      addLog('success', `[AUTO-TRADE] ${side} ${executedQty} ${symbol} executado (${formatUsd(executedValue)})`);
       state.trades.push({
         time: new Date(),
         symbol: symbol,

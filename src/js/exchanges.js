@@ -611,12 +611,34 @@ const exchanges = {
     async normalizeOrderToRules(config, order) {
       const symbol = String(order.symbol || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
       const orderType = String(order.type || 'MARKET').toUpperCase();
+      const side = String(order.side || '').toUpperCase();
       const rules = await this.getSymbolRules(config, symbol);
       const step = orderType === 'MARKET' ? rules.marketStepSize : rules.stepSize;
       const minQty = orderType === 'MARKET' ? rules.marketMinQty : rules.minQty;
       const maxQty = orderType === 'MARKET' ? rules.marketMaxQty : rules.maxQty;
-      let quantity = this.floorToStep(Number(order.quantity), step);
+      const price = orderType === 'LIMIT'
+        ? Number(order.price || 0)
+        : await this.getTickerPrice(config, symbol);
 
+      // Para BUY MARKET na Binance, usar quoteOrderQty garante valor mínimo em USDT
+      // e evita erro LOT_SIZE por quantidade calculada com preço desatualizado.
+      const quoteOrderQty = Number(order.quoteOrderQty || order.quote_order_qty || 0);
+      if (orderType === 'MARKET' && side === 'BUY' && quoteOrderQty > 0) {
+        if (rules.minNotional && quoteOrderQty < rules.minNotional) {
+          throw new Error(`Binance ${symbol}: quoteOrderQty ${quoteOrderQty.toFixed(4)} USDT abaixo do mínimo ${rules.minNotional} USDT`);
+        }
+        return {
+          ...order,
+          symbol,
+          quoteOrderQty: this.formatByStep(quoteOrderQty, '0.00000001'),
+          quantity: undefined,
+          price: undefined,
+          rules,
+          estimatedNotional: quoteOrderQty
+        };
+      }
+
+      let quantity = this.floorToStep(Number(order.quantity), step);
       if (!Number.isFinite(quantity) || quantity <= 0) {
         throw new Error(`Binance ${symbol}: quantidade inválida`);
       }
@@ -625,17 +647,15 @@ const exchanges = {
       }
       if (maxQty && quantity > maxQty) quantity = this.floorToStep(maxQty, step);
 
-      let price = Number(order.price || 0);
+      let normalizedPrice = price;
       if (orderType === 'LIMIT') {
-        if (!Number.isFinite(price) || price <= 0) throw new Error(`Binance ${symbol}: ordem LIMIT precisa de preço válido`);
-        price = this.floorToStep(price, rules.tickSize);
-      } else {
-        price = await this.getTickerPrice(config, symbol);
+        if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) throw new Error(`Binance ${symbol}: ordem LIMIT precisa de preço válido`);
+        normalizedPrice = this.floorToStep(normalizedPrice, rules.tickSize);
       }
 
-      const notional = price * quantity;
+      const notional = normalizedPrice * quantity;
       if (rules.minNotional && notional < rules.minNotional) {
-        const neededQty = this.ceilToStep((rules.minNotional / price), step);
+        const neededQty = this.ceilToStep((rules.minNotional / normalizedPrice), step);
         throw new Error(`Binance ${symbol}: valor da ordem ${notional.toFixed(4)} USDT abaixo do mínimo ${rules.minNotional} USDT. Quantidade mínima aproximada: ${this.formatByStep(neededQty, step)} ${rules.baseAsset}`);
       }
 
@@ -643,7 +663,7 @@ const exchanges = {
         ...order,
         symbol,
         quantity: this.formatByStep(quantity, step),
-        price: orderType === 'LIMIT' ? this.formatByStep(price, rules.tickSize) : undefined,
+        price: orderType === 'LIMIT' ? this.formatByStep(normalizedPrice, rules.tickSize) : undefined,
         rules,
         estimatedNotional: notional
       };
@@ -770,9 +790,10 @@ const exchanges = {
           symbol: normalized.symbol,
           side,
           type: orderType,
-          quantity: normalized.quantity,
           timestamp: timestamp.toString()
         };
+        if (normalized.quoteOrderQty) params.quoteOrderQty = normalized.quoteOrderQty;
+        else params.quantity = normalized.quantity;
 
         if (orderType === 'LIMIT') {
           params.price = normalized.price;
