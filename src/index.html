@@ -111,9 +111,9 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="9" cy="16" r="1.5" fill="currentColor"/><circle cx="15" cy="16" r="1.5" fill="currentColor"/><path d="M12 2L12 8"/></svg>
             Criar Bot
           </button>
-          <button class="btn btn-primary" id="btn-start-bot" onclick="toggleBot()">
+          <button class="btn btn-primary" id="btn-start-bot" onclick="dashboardAIButtonClick()">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Iniciar IA
+            Criar IA
           </button>
         </div>
       </div>
@@ -1740,20 +1740,42 @@
     </div>
   </div>
 
+  <!-- Create IA Modal -->
+  <div id="create-ai-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);z-index:3190;align-items:center;justify-content:center;padding:24px;">
+    <div style="width:min(820px,94vw);max-height:86vh;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:18px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;gap:12px;">
+        <div>
+          <h2 style="margin:0;font-size:22px;color:#050505;-webkit-text-fill-color:#050505;">Criar IA</h2>
+          <p style="margin:4px 0 0;color:var(--text-muted);font-size:12px;">A IA usa exatamente as configurações da aba IA Config: provedor, modelo, pares monitorados, intervalo, tokens, risco e auto-trade.</p>
+        </div>
+        <button class="btn btn-sm btn-outline" onclick="closeCreateAIModal()">Fechar</button>
+      </div>
+      <div style="padding:18px 20px;overflow-y:auto;">
+        <div id="create-ai-summary" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
+        <div style="margin-top:14px;padding:12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:rgba(255,255,255,.035);font-size:12px;color:var(--text-muted);line-height:1.5;">
+          Se quiser alterar modelo, moedas, intervalo ou auto-trade, faça isso na aba <strong>IA Config</strong>. Este botão apenas cria/inicia a IA com o que já está configurado lá.
+        </div>
+      </div>
+      <div style="padding:14px 20px;border-top:1px solid var(--border-color);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">
+        <button class="btn btn-outline" onclick="navigateTo('ai-config'); closeCreateAIModal();">Abrir IA Config</button>
+        <button class="btn btn-primary" onclick="createAndStartAI()">Criar e iniciar IA</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Create Bot Modal -->
   <div id="create-bot-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.68);z-index:3200;align-items:center;justify-content:center;padding:24px;">
     <div style="width:min(980px,96vw);max-height:90vh;background:var(--bg-secondary);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);display:flex;flex-direction:column;overflow:hidden;">
       <div style="padding:18px 20px;border-bottom:1px solid var(--border-color);display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <div>
           <h2 style="margin:0;font-size:22px;color:#050505;-webkit-text-fill-color:#050505;">Criar Bot</h2>
-          <p style="margin:4px 0 0;color:var(--text-muted);font-size:12px;">Configure um bot simples, IA ou Bot + IA. Você pode deixar a IA escolher as melhores opções.</p>
+          <p style="margin:4px 0 0;color:var(--text-muted);font-size:12px;">Configure um Bot técnico ou Bot + IA. A IA pura agora é criada pelo botão Criar IA do Dashboard.</p>
         </div>
         <button class="btn btn-sm btn-outline" onclick="closeCreateBotModal()">Fechar</button>
       </div>
       <div style="padding:18px 20px;overflow-y:auto;">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:16px;">
           <div class="bot-mode-card active" id="create-mode-bot" onclick="selectCreateBotMode('bot')"><div class="bot-mode-icon bot-mode-icon-solo"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="9" cy="16" r="1.5" fill="currentColor"/><circle cx="15" cy="16" r="1.5" fill="currentColor"/></svg></div><h3>Bot</h3><p>Sinais técnicos com indicadores.</p></div>
-          <div class="bot-mode-card" id="create-mode-ai" onclick="selectCreateBotMode('ai')"><div class="bot-mode-icon bot-mode-icon-ai"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a4 4 0 0 1 4 4c0 2-1.4 3.6-3.25 3.93V12h2.75a3.5 3.5 0 0 1 3.5 3.5"/></svg></div><h3>IA</h3><p>Decisão guiada pela IA configurada.</p></div>
           <div class="bot-mode-card" id="create-mode-hybrid" onclick="selectCreateBotMode('hybrid')"><div class="bot-mode-icon bot-mode-icon-hybrid"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="20" cy="6" r="4" stroke-dasharray="2 2"/></svg></div><h3>Bot + IA</h3><p>Combina técnico, notícias e IA.</p></div>
         </div>
         <div class="card" style="margin-bottom:16px;">

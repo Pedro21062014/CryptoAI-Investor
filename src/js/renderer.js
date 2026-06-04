@@ -885,13 +885,13 @@ function updateBotUI() {
   const status = document.getElementById('bot-status');
 
   if (state.botRunning) {
-    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Parar Bot';
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Parar IA';
     btn.className = 'btn btn-sell';
-    status.innerHTML = '<span class="status-dot online"></span><span class="status-text">Bot Ativo</span>';
+    status.innerHTML = '<span class="status-dot online"></span><span class="status-text">IA Ativa</span>';
   } else {
-    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Iniciar Bot';
+    btn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> Criar IA';
     btn.className = 'btn btn-primary';
-    status.innerHTML = '<span class="status-dot offline"></span><span class="status-text">Bot Parado</span>';
+    status.innerHTML = '<span class="status-dot offline"></span><span class="status-text">IA Parada</span>';
   }
 }
 
@@ -2569,6 +2569,74 @@ function updateAIMetrics(tokenCount) {
 }
 
 
+
+// ===== Dashboard Create IA Modal =====
+function dashboardAIButtonClick() {
+  if (state.botRunning) {
+    stopBot();
+  } else {
+    openCreateAIModal();
+  }
+}
+
+function openCreateAIModal() {
+  updateCreateAISummary();
+  const modal = document.getElementById('create-ai-modal');
+  if (modal) modal.style.display = 'flex';
+}
+
+function closeCreateAIModal() {
+  const modal = document.getElementById('create-ai-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function updateCreateAISummary() {
+  const container = document.getElementById('create-ai-summary');
+  if (!container) return;
+  const provider = state.activeAI || 'Nenhuma IA';
+  const aiConfig = state.activeAI ? state.aiConfigs[state.activeAI] : null;
+  const model = aiConfig?.model || 'não selecionado';
+  const pairs = document.getElementById('monitor-pairs')?.value || 'BTCUSDT';
+  const interval = document.getElementById('request-interval')?.value || '5';
+  const autoTrade = document.getElementById('auto-trade')?.value || 'disabled';
+  const maxTokens = document.getElementById('max-tokens')?.value || '2000';
+  const exchange = state.activeExchange || 'Nenhuma corretora';
+  const cards = [
+    ['IA ativa', provider],
+    ['Modelo', model],
+    ['Corretora', exchange],
+    ['Moedas', pairs],
+    ['Intervalo', `${interval} min`],
+    ['Auto-trade IA', autoTrade],
+    ['Max tokens', maxTokens],
+    ['Risco máximo', state.riskConfig.maxRiskLevel || 'LOW']
+  ];
+  container.innerHTML = cards.map(([label, value]) => `
+    <div style="padding:12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:rgba(255,255,255,.035);">
+      <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;font-weight:700;">${label}</div>
+      <div style="font-size:14px;color:var(--text-primary);font-weight:800;margin-top:4px;word-break:break-word;">${value}</div>
+    </div>
+  `).join('');
+}
+
+async function createAndStartAI() {
+  closeCreateAIModal();
+  if (!state.activeExchange) {
+    showToast('Conecte uma corretora antes de criar a IA', 'warning');
+    navigateTo('exchanges');
+    return;
+  }
+  if (!state.activeAI || !state.aiConfigs[state.activeAI]?.apiKey) {
+    showToast('Configure/conecte uma IA na aba IA Config primeiro', 'warning');
+    navigateTo('ai-config');
+    return;
+  }
+  if (state.botRunning) stopBot();
+  await startBot();
+  showToast('IA criada e iniciada com as configurações da IA Config', 'success');
+  addLog('success', `IA criada pelo Dashboard usando ${state.activeAI}`);
+}
+
 // ===== Dashboard Create Bot Modal =====
 let createBotMode = 'bot';
 
@@ -2584,13 +2652,13 @@ function closeCreateBotModal() {
 }
 
 function selectCreateBotMode(mode) {
-  createBotMode = mode;
-  ['bot', 'ai', 'hybrid'].forEach(m => document.getElementById(`create-mode-${m}`)?.classList.toggle('active', m === mode));
+  createBotMode = mode === 'ai' ? 'hybrid' : mode;
+  ['bot', 'hybrid'].forEach(m => document.getElementById(`create-mode-${m}`)?.classList.toggle('active', m === createBotMode));
   updateCreateBotSummary();
 }
 
 function syncCreateBotModalFromCurrent() {
-  selectCreateBotMode(botState?.mode || 'bot');
+  selectCreateBotMode(botState?.mode === 'ai' ? 'hybrid' : (botState?.mode || 'bot'));
   const set = (id, value) => { const el = document.getElementById(id); if (el !== null && el !== undefined) el.value = value; };
   const setChecked = (id, value) => { const el = document.getElementById(id); if (el) el.checked = !!value; };
   set('create-bot-symbol', document.getElementById('bot-symbol')?.value || 'BTCUSDT');
@@ -2630,7 +2698,7 @@ function autoChooseBotConfig() {
 function updateCreateBotSummary() {
   const summary = document.getElementById('create-bot-summary');
   if (!summary) return;
-  const modeName = { bot: 'Bot', ai: 'IA', hybrid: 'Bot + IA' }[createBotMode] || 'Bot';
+  const modeName = { bot: 'Bot', hybrid: 'Bot + IA' }[createBotMode] || 'Bot';
   const paper = document.getElementById('create-bot-paper')?.checked ? 'Paper Trading' : 'Modo Real';
   const multi = document.getElementById('create-bot-multi')?.checked ? 'multi-moedas' : 'moeda única';
   const conf = document.getElementById('create-bot-confidence')?.value || 72;
