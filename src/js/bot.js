@@ -565,7 +565,7 @@ module.exports = {
       const atrVal = result.indicators.atr;
 
       if (result.overall === 'BUY' && atrVal) {
-        targetPrice = currentPrice + atrVal * 2;
+        targetPrice = currentPrice * 1.025;
         stopLoss = currentPrice - atrVal * 1.5;
       } else if (result.overall === 'SELL' && atrVal) {
         targetPrice = currentPrice - atrVal * 2;

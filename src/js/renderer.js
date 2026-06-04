@@ -2020,12 +2020,28 @@ async function validateSymbolForExecution(exchange, symbol) {
   }
 }
 
+function isSymbolInPortfolio(symbol) {
+  const positions = getRealPortfolioPositions();
+  const baseSymbol = symbol.replace('USDT', '');
+  return positions.some(p => p.coin === baseSymbol);
+}
+
 async function executeAITrade(analysis) {
   const exchange = state.activeExchange;
   if (!exchange) return;
 
   const side = analysis.recommendation === 'BUY' ? 'BUY' : 'SELL';
   const symbol = analysis.symbol || 'BTCUSDT';
+  
+  // Diversificacao: Nao permite multiplas entradas da mesma moeda
+  if (side === 'BUY' && isSymbolInPortfolio(symbol)) {
+    const reason = `Diversificacao: ${symbol} ja existe no portfolio. Evitando multiplas entradas.`;
+    updateAutoTradeChecklist({ ...analysis, execution: { ...(analysis.execution || {}), shouldExecute: false, reason } });
+    addLog('warning', `[AUTO-TRADE] Bloqueado: ${reason}`);
+    showToast(reason, 'warning');
+    return;
+  }
+
   const learnedBlock = isSymbolBlockedByLearning(exchange, symbol);
   if (learnedBlock.blocked) {
     updateAutoTradeChecklist({ ...analysis, execution: { ...(analysis.execution || {}), shouldExecute: false, reason: `Aprendizado: evitar ${symbol} até ${new Date(learnedBlock.blockedUntil).toLocaleString('pt-BR')} (${learnedBlock.reason})` } });
@@ -2063,6 +2079,12 @@ async function executeAITrade(analysis) {
   }
 
   const price = toFiniteNumber(analysis.entry_price || analysis.currentPrice, 0);
+  
+  // Estrategia de Saida: Definir target de 2.5% para compras
+  if (side === 'BUY' && price > 0) {
+    analysis.target_price = Math.round((price * 1.025) * 100) / 100;
+  }
+
   const totalBalance = toFiniteNumber(state.totalBalance, 0);
   const paperMode = isPaperMode();
   const notional = getAIChosenNotional(analysis, totalBalance, exchange, paperMode);
