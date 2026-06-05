@@ -1972,7 +1972,14 @@ function updateLatestAIExecutionUI(execution = {}) {
 function getAIMinOrderUsdt(exchange, paperMode) {
   const configured = parseFloat(localStorage.getItem('cryptoai-ai-min-order-usdt') || '5');
   const baseMin = Number.isFinite(configured) ? configured : 5;
-  if (exchange === 'binance' && !paperMode) return Math.max(5, baseMin);
+  // Binance: venda mínima = $5 + comissão de venda 0.2%
+  // Para que o líquido da venda seja >= $5 após comissão, o valor da posição deve ser >= $5 / (1 - 0.002)
+  // Na compra também há 0.2% de comissão, então o notional de compra mínimo = $5 / (1 - 0.002)^2
+  // = $5 / 0.996004 ≈ $5.0201. Arredondamos para $5.03 por segurança.
+  const BINANCE_SELL_MIN_NOTIONAL = 5;
+  const BINANCE_COMMISSION_RATE = 0.002; // 0.2%
+  const binanceMinBuy = BINANCE_SELL_MIN_NOTIONAL / Math.pow(1 - BINANCE_COMMISSION_RATE, 2); // ~$5.02
+  if (exchange === 'binance' && !paperMode) return Math.max(binanceMinBuy, baseMin);
   return Math.max(0.1, baseMin);
 }
 
@@ -2090,10 +2097,15 @@ async function executeAITrade(analysis) {
   const notional = getAIChosenNotional(analysis, totalBalance, exchange, paperMode);
   const orderPercent = totalBalance > 0 ? (notional / totalBalance) * 100 : 0;
 
-  if (!paperMode && exchange === 'binance' && notional < 5) {
+  // Binance: mínimo de compra considera venda mínima $5 + 0.2% comissão compra/venda
+  // minBuyNotional = $5 / (1 - 0.002)^2 ≈ $5.02
+  const BINANCE_SELL_MIN_NOTIONAL = 5;
+  const BINANCE_COMMISSION_RATE = 0.002; // 0.2%
+  const binanceMinBuyNotional = BINANCE_SELL_MIN_NOTIONAL / Math.pow(1 - BINANCE_COMMISSION_RATE, 2);
+  if (!paperMode && exchange === 'binance' && notional < binanceMinBuyNotional) {
     updateAutoTradeChecklist(analysis);
-    addLog('warning', `[AUTO-TRADE] Bloqueado: Binance exige mínimo de 5 USDT por operação real. Saldo/tamanho atual: ${formatUsd(notional)}`);
-    showToast('Binance exige mínimo de 5 USDT por operação real', 'warning');
+    addLog('warning', `[AUTO-TRADE] Bloqueado: Binance exige mínimo de ~${binanceMinBuyNotional.toFixed(2)} USDT por compra (venda mínima $5 + 0.2% comissão compra/venda). Saldo/tamanho atual: ${formatUsd(notional)}`);
+    showToast(`Binance exige mínimo de ~${binanceMinBuyNotional.toFixed(2)} USDT (venda mínima $5 + comissão 0.2%)`, 'warning');
     return;
   }
 
