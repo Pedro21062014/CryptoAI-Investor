@@ -80,6 +80,11 @@ module.exports = {
     const maxLoss = config.maxLoss || 5;
     const maxPositionSize = config.maxPositionSize || 10;
 
+    // Binance commission: 0.2% on buy + 0.2% on sell = 0.4% total round-trip
+    const BINANCE_COMMISSION_RATE = 0.002;
+    const BINANCE_ROUND_TRIP_COMMISSION = BINANCE_COMMISSION_RATE * 2; // 0.4%
+    const isBinance = String(config.exchange || '').toLowerCase() === 'binance';
+
     const validation = {
       valid: true,
       errors: [],
@@ -97,14 +102,34 @@ module.exports = {
       }
     }
 
-    // Check max loss
+    // Binance: validar que o notional da ordem cobre venda mínima $5 + comissão
+    if (isBinance) {
+      const notional = trade.quantity * (trade.price || 0);
+      const BINANCE_SELL_MIN = 5;
+      const minBuyNotional = BINANCE_SELL_MIN / Math.pow(1 - BINANCE_COMMISSION_RATE, 2); // ~$5.02
+      if (notional > 0 && notional < minBuyNotional) {
+        validation.valid = false;
+        validation.errors.push(`Binance: ordem de ${notional.toFixed(2)} USDT abaixo do mínimo efetivo ${minBuyNotional.toFixed(2)} USDT (venda mínima $5 + 0.2% comissão compra/venda)`);
+      }
+      // Avisar sobre custo total de round-trip (comissão compra + venda)
+      if (notional > 0) {
+        const roundTripCost = notional * BINANCE_ROUND_TRIP_COMMISSION;
+        validation.warnings.push(`Binance: custo estimado de comissão (compra+venda): ${roundTripCost.toFixed(4)} USDT (0.4% de ${notional.toFixed(2)} USDT)`);
+      }
+    }
+
+    // Check max loss (including commission cost for Binance)
     if (trade.stopLoss && trade.price) {
-      const lossPercent = Math.abs((trade.stopLoss - trade.price) / trade.price * 100);
+      let lossPercent = Math.abs((trade.stopLoss - trade.price) / trade.price * 100);
+      // Para Binance, somar o custo de round-trip commission na perda potencial
+      if (isBinance) {
+        lossPercent += BINANCE_ROUND_TRIP_COMMISSION * 100; // +0.4%
+      }
       if (lossPercent > maxLoss) {
         const adjustedStop = trade.side === 'BUY'
           ? trade.price * (1 - maxLoss / 100)
           : trade.price * (1 + maxLoss / 100);
-        validation.warnings.push(`Stop loss would cause ${lossPercent.toFixed(2)}% loss (max: ${maxLoss}%). Adjusted stop loss.`);
+        validation.warnings.push(`Stop loss + comissões (${lossPercent.toFixed(2)}%) excede máximo (${maxLoss}%). Stop loss ajustado.`);
         validation.adjustedTrade.stopLoss = adjustedStop;
       }
     }

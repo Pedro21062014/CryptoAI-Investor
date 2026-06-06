@@ -1,6 +1,6 @@
 {
   "name": "crypto-ai-investor",
-  "version": "1.6.8",
+  "version": "1.7.0",
   "description": "AI-Powered Crypto Investment Desktop Application",
   "main": "main.js",
   "author": "CryptoAI Investor",
@@ -28,8 +28,16 @@
     "win": {
       "target": [
         {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "ia32"
+          ]
+        },
+        {
           "target": "zip",
           "arch": [
+            "x64",
             "ia32"
           ]
         }
@@ -42,7 +50,8 @@
         {
           "target": "deb",
           "arch": [
-            "x64"
+            "x64",
+            "ia32"
           ]
         }
       ],
@@ -62,7 +71,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "CryptoAI Investor",
-      "artifactName": "${productName}-${version}-Setup.${ext}"
+      "artifactName": "${productName}-${version}-${arch}-Setup.${ext}"
     }
   },
   "dependencies": {

@@ -620,12 +620,21 @@ const exchanges = {
         ? Number(order.price || 0)
         : await this.getTickerPrice(config, symbol);
 
+      // Binance: venda mínima = $5 + comissão 0.2% na venda.
+      // Para garantir que o valor líquido da venda seja >= $5, a posição comprada
+      // deve ter notional >= $5 / (1 - 0.002) após a comissão de compra.
+      // Considerando comissão de compra E venda: minBuyNotional = $5 / (1 - 0.002)^2 ≈ $5.02
+      const BINANCE_SELL_MIN_NOTIONAL = 5;
+      const BINANCE_COMMISSION_RATE = 0.002; // 0.2%
+      const minBuyNotional = BINANCE_SELL_MIN_NOTIONAL / Math.pow(1 - BINANCE_COMMISSION_RATE, 2);
+      const effectiveMinNotional = Math.max(rules.minNotional || 0, minBuyNotional);
+
       // Para BUY MARKET na Binance, usar quoteOrderQty garante valor mínimo em USDT
       // e evita erro LOT_SIZE por quantidade calculada com preço desatualizado.
       const quoteOrderQty = Number(order.quoteOrderQty || order.quote_order_qty || 0);
       if (orderType === 'MARKET' && side === 'BUY' && quoteOrderQty > 0) {
-        if (rules.minNotional && quoteOrderQty < rules.minNotional) {
-          throw new Error(`Binance ${symbol}: quoteOrderQty ${quoteOrderQty.toFixed(4)} USDT abaixo do mínimo ${rules.minNotional} USDT`);
+        if (quoteOrderQty < effectiveMinNotional) {
+          throw new Error(`Binance ${symbol}: quoteOrderQty ${quoteOrderQty.toFixed(4)} USDT abaixo do mínimo efetivo ${effectiveMinNotional.toFixed(2)} USDT (venda mínima $5 + comissão 0.2% compra/venda)`);
         }
         return {
           ...order,
@@ -634,6 +643,7 @@ const exchanges = {
           quantity: undefined,
           price: undefined,
           rules,
+          effectiveMinNotional,
           estimatedNotional: quoteOrderQty
         };
       }
@@ -654,9 +664,9 @@ const exchanges = {
       }
 
       const notional = normalizedPrice * quantity;
-      if (rules.minNotional && notional < rules.minNotional) {
-        const neededQty = this.ceilToStep((rules.minNotional / normalizedPrice), step);
-        throw new Error(`Binance ${symbol}: valor da ordem ${notional.toFixed(4)} USDT abaixo do mínimo ${rules.minNotional} USDT. Quantidade mínima aproximada: ${this.formatByStep(neededQty, step)} ${rules.baseAsset}`);
+      if (notional < effectiveMinNotional) {
+        const neededQty = this.ceilToStep((effectiveMinNotional / normalizedPrice), step);
+        throw new Error(`Binance ${symbol}: valor da ordem ${notional.toFixed(4)} USDT abaixo do mínimo efetivo ${effectiveMinNotional.toFixed(2)} USDT (venda mínima $5 + comissão 0.2% compra/venda). Quantidade mínima aproximada: ${this.formatByStep(neededQty, step)} ${rules.baseAsset}`);
       }
 
       return {
@@ -665,6 +675,7 @@ const exchanges = {
         quantity: this.formatByStep(quantity, step),
         price: orderType === 'LIMIT' ? this.formatByStep(normalizedPrice, rules.tickSize) : undefined,
         rules,
+        effectiveMinNotional,
         estimatedNotional: notional
       };
     },
