@@ -195,14 +195,24 @@ async function downloadLatestUpdate(event) {
 
 async function installDownloadedUpdate() {
   if (!downloadedUpdatePath || !fs.existsSync(downloadedUpdatePath)) return { success: false, error: 'Arquivo de atualizacao nao encontrado. Baixe novamente.' };
-  if (process.platform === 'win32' && downloadedUpdatePath.toLowerCase().endsWith('.exe')) {
-    spawn(downloadedUpdatePath, [], { detached: true, stdio: 'ignore' }).unref();
-    isQuitting = true;
-    setTimeout(() => app.quit(), 1000);
-    return { success: true, quitting: true };
+  
+  try {
+    // For Windows EXEs, shell.openPath is better as it handles UAC elevation and permissions
+    if (process.platform === 'win32' && downloadedUpdatePath.toLowerCase().endsWith('.exe')) {
+      const result = await shell.openPath(downloadedUpdatePath);
+      if (result) {
+        return { success: false, error: `Erro ao abrir instalador: ${result}` };
+      }
+      isQuitting = true;
+      setTimeout(() => app.quit(), 1000);
+      return { success: true, quitting: true };
+    }
+
+    const result = await shell.openPath(downloadedUpdatePath);
+    return { success: !result, error: result || null, filePath: downloadedUpdatePath };
+  } catch (e) {
+    return { success: false, error: e.message };
   }
-  const result = await shell.openPath(downloadedUpdatePath);
-  return { success: !result, error: result || null, filePath: downloadedUpdatePath };
 }
 
 
