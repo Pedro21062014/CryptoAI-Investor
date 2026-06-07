@@ -137,9 +137,10 @@ input, select, button { font-family: var(--font-primary); }
 .titlebar-title {
   font-size: 13px;
   font-weight: 800;
-  color: #050505;
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
   letter-spacing: 0.5px;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.55), 0 0 10px rgba(247,201,72,0.25);
+  text-shadow: none;
 }
 
 .titlebar-controls {
@@ -193,11 +194,11 @@ input, select, button { font-family: var(--font-primary); }
 .logo-text {
   font-size: 20px;
   font-weight: 900;
-  color: #050505;
-  -webkit-text-fill-color: #050505;
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
   background: none;
   letter-spacing: -0.5px;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.55), 0 0 14px rgba(247,201,72,0.28);
+  text-shadow: none;
 }
 
 .sidebar-nav {
@@ -294,10 +295,10 @@ input, select, button { font-family: var(--font-primary); }
 .page-header h1 {
   font-size: 28px;
   font-weight: 900;
-  color: #050505;
-  -webkit-text-fill-color: #050505;
+  color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
   background: none;
-  text-shadow: 0 1px 0 rgba(255,255,255,0.55), 0 0 14px rgba(247,201,72,0.20);
+  text-shadow: none;
 }
 
 /* ===== AI Active Badge ===== */
@@ -1421,9 +1422,19 @@ input[type="search"] {
   .ai-activity-grid { grid-template-columns: 1fr; }
 }
 
-/* ===== Logo adjustments for light theme ===== */
+/* ===== Theme-specific text adjustments ===== */
+[data-theme="dark"] .logo-text,
+[data-theme="dark"] .page-header h1,
+[data-theme="dark"] .titlebar-title {
+  color: #ffffff;
+  -webkit-text-fill-color: #ffffff;
+  background: none;
+  text-shadow: none;
+}
+
 [data-theme="light"] .logo-text,
-[data-theme="light"] .page-header h1 {
+[data-theme="light"] .page-header h1,
+[data-theme="light"] .titlebar-title {
   color: #050505;
   -webkit-text-fill-color: #050505;
   background: none;
