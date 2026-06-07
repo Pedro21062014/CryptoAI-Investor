@@ -1,5 +1,10 @@
 const axios = require('axios');
 
+// AI-specific timeout (3 minutes) — analysis requests can take longer
+const AI_TIMEOUT = 180000;
+const AI_MAX_RETRIES = 2;
+const AI_RETRY_DELAY = 3000;
+
 const aiProviders = {
   deepseek: {
     baseUrl: 'https://api.deepseek.com/v1',
@@ -10,6 +15,7 @@ const aiProviders = {
         temperature: config.temperature || 0.3,
         max_tokens: config.maxTokens || 2000
       }, {
+        timeout: AI_TIMEOUT,
         headers: {
           'Authorization': `Bearer ${config.apiKey}`,
           'Content-Type': 'application/json'
@@ -28,6 +34,7 @@ const aiProviders = {
         temperature: config.temperature || 0.3,
         max_tokens: config.maxTokens || 2000
       }, {
+        timeout: AI_TIMEOUT,
         headers: {
           'Authorization': `Bearer ${config.apiKey}`,
           'Content-Type': 'application/json'
@@ -47,7 +54,8 @@ const aiProviders = {
       }));
       const response = await axios.post(
         `${this.baseUrl}/models/${model}:generateContent?key=${config.apiKey}`,
-        { contents, generationConfig: { temperature: config.temperature || 0.3 } }
+        { contents, generationConfig: { temperature: config.temperature || 0.3 } },
+        { timeout: AI_TIMEOUT }
       );
       return response.data;
     }
@@ -62,6 +70,7 @@ const aiProviders = {
         temperature: config.temperature || 0.3,
         max_tokens: config.maxTokens || 2000
       }, {
+        timeout: AI_TIMEOUT,
         headers: {
           'Authorization': `Bearer ${config.apiKey}`,
           'Content-Type': 'application/json'
@@ -82,6 +91,7 @@ const aiProviders = {
         system: systemMsg?.content || '',
         messages: chatMsgs
       }, {
+        timeout: AI_TIMEOUT,
         headers: {
           'x-api-key': config.apiKey,
           'anthropic-version': '2023-06-01',
@@ -101,6 +111,7 @@ const aiProviders = {
         temperature: config.temperature || 0.3,
         max_tokens: config.maxTokens || 2000
       }, {
+        timeout: AI_TIMEOUT,
         headers: {
           'Authorization': `Bearer ${config.apiKey}`,
           'Content-Type': 'application/json',
@@ -120,6 +131,7 @@ const aiProviders = {
         temperature: config.temperature || 0.3,
         max_tokens: config.maxTokens || 2000
       }, {
+        timeout: AI_TIMEOUT,
         headers: {
           'Authorization': `Bearer ${config.apiKey}`,
           'Content-Type': 'application/json',
@@ -212,6 +224,57 @@ function extractResponse(provider, data) {
   }
 }
 
+// Helper: get human-readable error from axios error
+function formatAIError(err) {
+  if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+    return `Timeout: a API demorou mais de ${Math.round((err.config?.timeout || AI_TIMEOUT) / 1000)}s para responder. Tente novamente ou use um modelo mais rápido.`;
+  }
+  if (err.response) {
+    const status = err.response.status;
+    const data = err.response.data;
+    const msg = data?.error?.message || data?.message || data?.error || '';
+    if (status === 401 || status === 403) {
+      return `Erro de autenticação (${status}): verifique sua API Key. ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`;
+    }
+    if (status === 429) {
+      return `Rate limit atingido (${status}): aguarde alguns segundos antes de tentar novamente. ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`;
+    }
+    if (status >= 500) {
+      return `Erro no servidor da API (${status}): o provedor está com problemas. Tente novamente em alguns instantes. ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`;
+    }
+    return `Erro HTTP ${status}: ${typeof msg === 'string' ? msg : JSON.stringify(msg)}`;
+  }
+  if (err.code === 'ENOTFOUND' || err.code === 'ECONNREFUSED') {
+    return `Não foi possível conectar ao servidor da API (${err.code}). Verifique sua conexão com a internet e a URL do provedor.`;
+  }
+  return err.message || 'Erro desconhecido na chamada da API';
+}
+
+// Helper: retry with exponential backoff
+async function retryAIRequest(fn, maxRetries = AI_MAX_RETRIES) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      // Don't retry auth errors
+      if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+        throw err;
+      }
+      // Don't retry invalid request errors
+      if (err.response && err.response.status >= 400 && err.response.status < 500 && err.response.status !== 429) {
+        throw err;
+      }
+      if (attempt < maxRetries) {
+        const delay = AI_RETRY_DELAY * Math.pow(2, attempt);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
 const SYSTEM_PROMPT = `You are an expert cryptocurrency investment AI analyst. Your role is to:
 1. Scan and analyze ALL available cryptocurrency markets - not just BTC or ETH
 2. Look for the BEST trading opportunities across ALL coins available on the exchange
@@ -280,7 +343,7 @@ async function chat(config, messages, context = {}) {
       { role: 'system', content: `${CHAT_SYSTEM_PROMPT}\n\n${langInstruction}\n\nAPP CONTEXT:\n${JSON.stringify(context, null, 2)}` },
       ...(messages || [])
     ];
-    const response = await provider.chat(config, finalMessages);
+    const response = await retryAIRequest(() => provider.chat(config, finalMessages));
     const text = extractResponse(config.provider, response);
     let actions = [];
     const match = text.match(/ACTION_JSON\s*:\s*(\{[\s\S]*\})/i);
@@ -290,7 +353,7 @@ async function chat(config, messages, context = {}) {
     const cleanText = text.replace(/ACTION_JSON\s*:\s*\{[\s\S]*\}\s*/i, '').trim();
     return { success: true, message: cleanText || text, raw: text, actions };
   } catch (err) {
-    return { success: false, error: err.message };
+    return { success: false, error: formatAIError(err) };
   }
 }
 
@@ -313,7 +376,7 @@ module.exports = {
         { role: 'user', content: `Analyze this crypto market data:\n${JSON.stringify(data, null, 2)}` }
       ];
 
-      const response = await provider.chat(config, messages);
+      const response = await retryAIRequest(() => provider.chat(config, messages));
       const text = extractResponse(config.provider, response);
 
       let parsed;
@@ -326,7 +389,7 @@ module.exports = {
 
       return { success: true, analysis: parsed, raw: text };
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: formatAIError(err) };
     }
   },
 
@@ -344,7 +407,7 @@ module.exports = {
       const text = extractResponse(config.provider, response);
       return { success: true, message: text };
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: formatAIError(err) };
     }
   },
 
@@ -379,7 +442,7 @@ You MUST include a "symbol" field in your response with the specific pair you re
         { role: 'user', content: prompt }
       ];
 
-      const response = await provider.chat(config, messages);
+      const response = await retryAIRequest(() => provider.chat(config, messages));
       const text = extractResponse(config.provider, response);
 
       let parsed;
@@ -392,7 +455,7 @@ You MUST include a "symbol" field in your response with the specific pair you re
 
       return { success: true, analysis: parsed, raw: text };
     } catch (err) {
-      return { success: false, error: err.message };
+      return { success: false, error: formatAIError(err) };
     }
   }
 };
