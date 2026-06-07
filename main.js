@@ -5,6 +5,11 @@ const https = require('https');
 const { spawn } = require('child_process');
 const axios = require('axios');
 
+// Set AppUserModelID for proper taskbar icon on Windows
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.cryptoai.investor');
+}
+
 let mainWindow;
 let tray;
 let isQuitting = false;
@@ -240,8 +245,17 @@ function saveSettings() {
   }
 }
 
+// Resolve icon path correctly for both dev and packaged (asar) environments
+function getIconPath(ext) {
+  if (app.isPackaged) {
+    // In production, extraResources copies build/ to resources/
+    return path.join(process.resourcesPath, 'icons', `icon.${ext}`);
+  }
+  return path.join(__dirname, 'build', `icon.${ext}`);
+}
+
 function createTray() {
-  const iconPath = path.join(__dirname, 'build', 'icon.png');
+  const iconPath = getIconPath('png');
   let trayIcon;
   try {
     trayIcon = nativeImage.createFromPath(iconPath);
@@ -287,7 +301,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: false
     },
-    icon: path.join(__dirname, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    icon: getIconPath(process.platform === 'win32' ? 'ico' : 'png'),
     show: false
   });
 
