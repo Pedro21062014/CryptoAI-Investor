@@ -1276,6 +1276,49 @@ function recordBalanceSnapshot(exchange, totalUsd, balanceDetails) {
   saveBalanceHistory();
 }
 
+// ===== Daily P&L Calculation =====
+function updateDailyPnl() {
+  const pnlEl = document.getElementById('daily-pnl');
+  const pctEl = document.getElementById('daily-pnl-pct');
+  if (!pnlEl && !pctEl) return;
+
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const currentBalance = toFiniteNumber(state.totalBalance, 0);
+
+  // Find the first snapshot of today to use as starting balance
+  const todaySnapshots = (state.balanceHistory || []).filter(h => {
+    const snapDate = new Date(h.timestamp).toISOString().slice(0, 10);
+    return snapDate === today;
+  });
+
+  // Also check for the most recent snapshot before today (for overnight P&L)
+  const beforeToday = (state.balanceHistory || []).filter(h => {
+    const snapDate = new Date(h.timestamp).toISOString().slice(0, 10);
+    return snapDate < today;
+  });
+
+  let startBalance = 0;
+  if (todaySnapshots.length > 0) {
+    // Use the oldest snapshot of today as the starting point
+    startBalance = toFiniteNumber(todaySnapshots[todaySnapshots.length - 1].totalUsd, 0);
+  } else if (beforeToday.length > 0) {
+    // No snapshots today yet - use the most recent one before today
+    startBalance = toFiniteNumber(beforeToday[0].totalUsd, 0);
+  }
+
+  const pnl = currentBalance - startBalance;
+  const pnlPct = startBalance > 0 ? (pnl / startBalance) * 100 : 0;
+
+  if (pnlEl) {
+    pnlEl.textContent = `${pnl >= 0 ? '+' : ''}${formatUsd(pnl)}`;
+    pnlEl.style.color = pnl >= 0 ? 'var(--accent-green)' : pnl < 0 ? 'var(--accent-red)' : '';
+  }
+  if (pctEl) {
+    pctEl.textContent = `${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`;
+    pctEl.style.color = pnl >= 0 ? 'var(--accent-green)' : pnl < 0 ? 'var(--accent-red)' : '';
+  }
+}
+
 function updateWalletUI(sourceLabel) {
   const totalEl = document.getElementById('wallet-total-balance');
   const countEl = document.getElementById('wallet-coin-count');
@@ -1291,6 +1334,9 @@ function updateWalletUI(sourceLabel) {
   if (histCountEl) histCountEl.textContent = state.balanceHistory.length;
   if (sourceBadge && sourceLabel) sourceBadge.textContent = sourceLabel;
   if (lastUpdate && state.balanceHistory[0]) lastUpdate.textContent = new Date(state.balanceHistory[0].timestamp).toLocaleString('pt-BR');
+
+  // Update daily P&L on dashboard
+  updateDailyPnl();
 
   if (tbody) {
     if (!state.balanceDetails.length) {
@@ -2260,7 +2306,11 @@ function updateTradesTable() {
   state.trades = trades;
 
   const dailyTradesEl = document.getElementById('daily-trades');
-  if (dailyTradesEl) dailyTradesEl.textContent = trades.length;
+  if (dailyTradesEl) {
+    const today = new Date().toISOString().slice(0, 10);
+    const todayTrades = trades.filter(t => t.time.toISOString().slice(0, 10) === today);
+    dailyTradesEl.textContent = todayTrades.length;
+  }
   if (!tbody) return;
 
   if (trades.length === 0) {
