@@ -1298,24 +1298,44 @@ function updateDailyPnl() {
   });
 
   let startBalance = 0;
+  let hasHistoricalData = false;
   if (todaySnapshots.length > 0) {
     // Use the oldest snapshot of today as the starting point
     startBalance = toFiniteNumber(todaySnapshots[todaySnapshots.length - 1].totalUsd, 0);
+    hasHistoricalData = true;
   } else if (beforeToday.length > 0) {
     // No snapshots today yet - use the most recent one before today
     startBalance = toFiniteNumber(beforeToday[0].totalUsd, 0);
+    hasHistoricalData = true;
   }
 
-  const pnl = currentBalance - startBalance;
-  const pnlPct = startBalance > 0 ? (pnl / startBalance) * 100 : 0;
+  // Calcular P&L de posições paper abertas (unrealized)
+  const paperUnrealizedPnl = state.paperTrading.positions.reduce((sum, pos) => {
+    return sum + calculatePositionPnl(pos);
+  }, 0);
+
+  // Calcular P&L realizado de paper trading hoje
+  const todayClosedPnl = state.paperTrading.history
+    .filter(h => h.type === 'CLOSE' && h.closedAt && new Date(h.closedAt).toISOString().slice(0, 10) === today)
+    .reduce((sum, h) => sum + toFiniteNumber(h.pnl, 0), 0);
+
+  // P&L do saldo da corretora (real trading)
+  let exchangePnl = 0;
+  if (hasHistoricalData) {
+    exchangePnl = currentBalance - startBalance;
+  }
+
+  // P&L total = P&L da corretora + P&L paper realizado hoje + P&L paper não realizado
+  const totalPnl = exchangePnl + todayClosedPnl + paperUnrealizedPnl;
+  const pnlPct = startBalance > 0 ? (totalPnl / startBalance) * 100 : (totalPnl !== 0 && state.paperTrading.initialCash > 0 ? (totalPnl / state.paperTrading.initialCash) * 100 : 0);
 
   if (pnlEl) {
-    pnlEl.textContent = `${pnl >= 0 ? '+' : ''}${formatUsd(pnl)}`;
-    pnlEl.style.color = pnl >= 0 ? 'var(--accent-green)' : pnl < 0 ? 'var(--accent-red)' : '';
+    pnlEl.textContent = `${totalPnl >= 0 ? '+' : ''}${formatUsd(totalPnl)}`;
+    pnlEl.style.color = totalPnl >= 0 ? 'var(--accent-green)' : totalPnl < 0 ? 'var(--accent-red)' : '';
   }
   if (pctEl) {
-    pctEl.textContent = `${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`;
-    pctEl.style.color = pnl >= 0 ? 'var(--accent-green)' : pnl < 0 ? 'var(--accent-red)' : '';
+    pctEl.textContent = `${totalPnl >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`;
+    pctEl.style.color = totalPnl >= 0 ? 'var(--accent-green)' : totalPnl < 0 ? 'var(--accent-red)' : '';
   }
 }
 
@@ -1485,6 +1505,20 @@ async function refreshPaperPrices() {
   for (const pos of state.paperTrading.positions) {
     const price = await getLatestPrice(pos.symbol);
     if (price > 0) pos.currentPrice = price;
+
+    // Auto-close: verifica take-profit e stop-loss
+    if (pos.side === 'BUY' && price > 0) {
+      if (pos.takeProfit && price >= pos.takeProfit) {
+        closePaperPosition(pos.id, `Take-profit atingido: ${formatUsd(price)} >= ${formatUsd(pos.takeProfit)}`);
+        addLog('success', `[PAPER] Take-profit: ${pos.symbol} atingiu ${formatUsd(price)}`);
+        continue;
+      }
+      if (pos.stopLoss && price <= pos.stopLoss) {
+        closePaperPosition(pos.id, `Stop-loss atingido: ${formatUsd(price)} <= ${formatUsd(pos.stopLoss)}`);
+        addLog('warning', `[PAPER] Stop-loss: ${pos.symbol} atingiu ${formatUsd(price)}`);
+        continue;
+      }
+    }
   }
   savePaperTrading();
 }
@@ -1510,10 +1544,32 @@ async function updatePositionsUI() {
   const stableValue = stablePositions.reduce((sum, c) => sum + toFiniteNumber(c.usdValue, 0), 0);
   const realTotal = toFiniteNumber(state.totalBalance, 0) || realPositions.reduce((sum, c) => sum + toFiniteNumber(c.usdValue, 0), 0);
 
+  // Calcular P&L não realizado das posições paper
+  const paperUnrealizedPnl = state.paperTrading.positions.reduce((sum, pos) => {
+    return sum + calculatePositionPnl(pos);
+  }, 0);
+  const paperRealizedPnl = toFiniteNumber(state.paperTrading.realizedPnl, 0);
+
+  // Paper equity = cash + valor das posições abertas
+  const paperPositionsValue = state.paperTrading.positions.reduce((sum, pos) => {
+    return sum + getPaperCurrentPrice(pos) * toFiniteNumber(pos.quantity, 0);
+  }, 0);
+  const paperTotalEquity = toFiniteNumber(state.paperTrading.cash, 0) + paperPositionsValue;
+
   setText('paper-equity', formatUsd(realTotal));
-  setText('paper-open-pnl', formatUsd(cryptoValue));
-  setText('paper-realized-pnl', formatUsd(stableValue));
-  setText('positions-count', cryptoPositions.length);
+  // paper-open-pnl agora mostra P&L não realizado (em vez de valor em cripto)
+  const openPnlEl = document.getElementById('paper-open-pnl');
+  if (openPnlEl) {
+    openPnlEl.textContent = `${paperUnrealizedPnl >= 0 ? '+' : ''}${formatUsd(paperUnrealizedPnl)}`;
+    openPnlEl.style.color = paperUnrealizedPnl > 0 ? 'var(--accent-green)' : paperUnrealizedPnl < 0 ? 'var(--accent-red)' : '';
+  }
+  // paper-realized-pnl agora mostra P&L realizado total (em vez de saldo stable)
+  const realizedPnlEl = document.getElementById('paper-realized-pnl');
+  if (realizedPnlEl) {
+    realizedPnlEl.textContent = `${paperRealizedPnl >= 0 ? '+' : ''}${formatUsd(paperRealizedPnl)}`;
+    realizedPnlEl.style.color = paperRealizedPnl > 0 ? 'var(--accent-green)' : paperRealizedPnl < 0 ? 'var(--accent-red)' : '';
+  }
+  setText('positions-count', cryptoPositions.length + state.paperTrading.positions.length);
 
   const badge = document.getElementById('paper-mode-badge');
   if (badge) {
@@ -2083,9 +2139,9 @@ async function executeAITrade(analysis) {
   const exchange = state.activeExchange;
   if (!exchange) return;
 
-  const side = analysis.recommendation === 'BUY' ? 'BUY' : 'SELL';
+  const side = ['BUY', 'SELL'].includes(analysis.recommendation) ? analysis.recommendation : 'BUY';
   const symbol = analysis.symbol || 'BTCUSDT';
-  
+
   // Diversificacao: Nao permite multiplas entradas da mesma moeda
   if (side === 'BUY' && isSymbolInPortfolio(symbol)) {
     const reason = `Diversificacao: ${symbol} ja existe no portfolio. Evitando multiplas entradas.`;
@@ -2093,6 +2149,19 @@ async function executeAITrade(analysis) {
     addLog('warning', `[AUTO-TRADE] Bloqueado: ${reason}`);
     showToast(reason, 'warning');
     return;
+  }
+
+  // Venda em spot: Verifica se o usuario realmente possui a moeda antes de vender
+  if (side === 'SELL' && isPaperMode()) {
+    const baseSymbol = symbol.replace('USDT', '');
+    const existingPaperPos = state.paperTrading.positions.find(p => p.symbol === symbol && p.side === 'BUY');
+    if (!existingPaperPos) {
+      const reason = `Venda bloqueada: voce nao possui ${symbol} no portfolio paper para vender.`;
+      updateAutoTradeChecklist({ ...analysis, execution: { ...(analysis.execution || {}), shouldExecute: false, reason } });
+      addLog('warning', `[AUTO-TRADE] ${reason}`);
+      showToast(reason, 'warning');
+      return;
+    }
   }
 
   const learnedBlock = isSymbolBlockedByLearning(exchange, symbol);
@@ -2225,6 +2294,39 @@ async function executeAITrade(analysis) {
   }
 
   if (isPaperMode()) {
+    if (side === 'SELL') {
+      // SELL em spot trading: fecha a posição de compra existente em vez de abrir short
+      const existingPos = state.paperTrading.positions.find(p => p.symbol === symbol && p.side === 'BUY');
+      if (existingPos) {
+        // Atualiza preço atual antes de fechar
+        const latestPrice = await getLatestPrice(symbol);
+        if (latestPrice > 0) existingPos.currentPrice = latestPrice;
+        const pnl = calculatePositionPnl(existingPos);
+        const exitValue = getPaperCurrentPrice(existingPos) * existingPos.quantity;
+        state.paperTrading.cash += exitValue;
+        state.paperTrading.realizedPnl += pnl;
+        state.paperTrading.positions = state.paperTrading.positions.filter(p => String(p.id) !== String(existingPos.id));
+        state.paperTrading.history.unshift({ ...existingPos, type: 'CLOSE', closedAt: new Date().toISOString(), pnl, reason: 'IA recomendou SELL', exitPrice: getPaperCurrentPrice(existingPos) });
+        savePaperTrading();
+        updatePositionsUI();
+        addLog('success', `[PAPER] Venda executada: ${symbol} | P&L ${formatUsd(pnl)} | Retorno ${formatUsd(exitValue)}`);
+        showToast(`Paper trade fechado: SELL ${existingPos.quantity} ${symbol} | P&L: ${formatUsd(pnl)}`, pnl >= 0 ? 'success' : 'warning');
+        state.trades.push({ time: new Date(), symbol, side: 'SELL', price: getPaperCurrentPrice(existingPos), quantity: existingPos.quantity, pnl, status: 'paper' });
+        updateTradesTable();
+        analysis.execution = { ...(analysis.execution || {}), shouldExecute: true, executed: true, reason: `Paper SELL executado: ${existingPos.quantity} ${symbol} P&L ${formatUsd(pnl)}` };
+        updateLatestAIExecutionUI(analysis.execution);
+        updateAutoTradeChecklist(analysis, order, { success: true, data: { paper: true, pnl } });
+        saveConfig();
+        return;
+      } else {
+        const reason = `Venda paper bloqueada: nenhuma posição de compra em ${symbol} encontrada.`;
+        addLog('warning', `[PAPER] ${reason}`);
+        showToast(reason, 'warning');
+        updateAutoTradeChecklist({ ...analysis, execution: { ...(analysis.execution || {}), shouldExecute: false, reason } });
+        return;
+      }
+    }
+    // BUY: abre posição normal
     addLog('info', `[PAPER] Simulando ${side} ${order.quantity} ${symbol} | ${formatUsd(notional)} (${orderPercent.toFixed(2)}% do saldo) | conf ${confidence}%`);
     const result = openPaperPosition(analysis, order);
     updateAutoTradeChecklist(analysis, order, result);
@@ -3637,6 +3739,12 @@ function updateCryptoBotUI() {
 
 async function runCryptoBotCycle(force = false) {
   if (!botState.running && !force) return;
+
+  // Atualizar preços das posições paper e verificar take-profit/stop-loss
+  if (state.paperTrading.positions.length > 0) {
+    await refreshPaperPrices();
+    updateDailyPnl();
+  }
 
   let symbol = document.getElementById('bot-symbol')?.value || 'BTCUSDT';
   if (symbol === 'custom') {
