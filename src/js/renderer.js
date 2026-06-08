@@ -36,8 +36,868 @@ const state = {
   coinSelectorData: [],
   coinSelectorSelected: new Set(['BTCUSDT', 'ETHUSDT', 'SOLUSDT']),
   tradeSymbolRules: null,
-  aiLearning: { blockedSymbols: {}, events: [] }
+  aiLearning: { blockedSymbols: {}, events: [] },
+  currentLanguage: 'pt-BR'
 };
+
+// ===== i18n Translation System =====
+const i18n = {
+  'pt-BR': {
+    // Navigation
+    'nav.dashboard': 'Dashboard',
+    'nav.wallet': 'Carteira',
+    'nav.exchanges': 'Corretoras',
+    'nav.ai-config': 'IA Config',
+    'nav.trading': 'Trading',
+    'nav.positions': 'Posições',
+    'nav.backtest': 'Backtest',
+    'nav.news': 'Notícias',
+    'nav.ai-chat': 'Chat IA',
+    'nav.ai-automations': 'Automações IA',
+    'nav.gateway': 'Gateway',
+    'nav.risk': 'Risco',
+    'nav.settings': 'Configurações',
+    // Page headers
+    'header.dashboard': 'Dashboard',
+    'header.wallet': 'Carteira',
+    'header.exchanges': 'Corretoras',
+    'header.ai-config': 'Configuração da IA',
+    'header.trading': 'Trading',
+    'header.positions': 'Posições',
+    'header.backtest': 'Backtest',
+    'header.news': 'Notícias & Sentimento',
+    'header.ai-chat': 'Chat com IA',
+    'header.ai-automations': 'Automações da IA',
+    'header.gateway': 'Gateway de Notificações',
+    'header.risk': 'Gestão de Risco',
+    'header.settings': 'Configurações',
+    // Dashboard stats
+    'stat.total-balance': 'Saldo Total',
+    'stat.daily-pnl': 'P&L Hoje',
+    'stat.daily-trades': 'Trades Hoje',
+    'stat.current-risk': 'Risco Atual',
+    'stat.risk-low': 'Baixo',
+    'stat.risk-medium': 'Médio',
+    'stat.risk-high': 'Alto',
+    // Dashboard sections
+    'dash.ai-learning': 'Linha de aprendizado da IA',
+    'dash.clear-learning': 'Limpar aprendizado',
+    'dash.ai-analysis': 'Análise da IA',
+    'dash.market': 'Mercado',
+    'dash.sentiment': 'Sentimento',
+    'dash.trade-history': 'Histórico de Trades',
+    'dash.analysis-history': 'Histórico de Análises da IA',
+    'dash.create-bot': 'Criar Bot',
+    'dash.create-ai': 'Criar IA',
+    'dash.update': 'Atualizar',
+    'dash.clear': 'Limpar',
+    'dash.disconnected': 'Desconectado',
+    'dash.neutral': 'Neutro',
+    'dash.analyses': 'análises',
+    // Dashboard empty states
+    'empty.ai-analysis': 'Configure a IA e inicie o bot para ver análises',
+    'empty.market': 'Conecte uma corretora para ver dados',
+    'empty.sentiment': 'Dados de sentimento carregarão automaticamente',
+    'empty.trades': 'Nenhum trade realizado',
+    'empty.analyses': 'Nenhuma análise realizada ainda',
+    'empty.ai-learning': 'A IA ainda não aprendeu bloqueios. Quando uma moeda falhar, ela será evitada automaticamente.',
+    // Wallet
+    'wallet.total-balance': 'Saldo Total',
+    'wallet.coins': 'Moedas',
+    'wallet.active-exchange': 'Corretora Ativa',
+    'wallet.snapshots': 'Snapshots',
+    'wallet.update-balances': 'Atualizar Saldos',
+    'wallet.waiting': 'Aguardando',
+    'wallet.balances-by-coin': 'Saldos por Moeda',
+    'wallet.balance-history': 'Histórico de Saldo',
+    'wallet.clear-history': 'Limpar Histórico',
+    'wallet.no-balances': 'Nenhum saldo carregado',
+    'wallet.no-snapshots': 'Nenhum snapshot de saldo ainda',
+    // Wallet table headers
+    'wallet-th.coin': 'Moeda',
+    'wallet-th.quantity': 'Quantidade',
+    'wallet-th.available': 'Disponível',
+    'wallet-th.locked': 'Bloqueado',
+    'wallet-th.value-usd': 'Valor USD',
+    'wallet-th.wallets': 'Carteiras',
+    // Trade table headers
+    'trade-th.time': 'Horário',
+    'trade-th.pair': 'Par',
+    'trade-th.side': 'Lado',
+    'trade-th.price': 'Preço',
+    'trade-th.qty': 'Qtd',
+    'trade-th.pnl': 'P&L',
+    'trade-th.status': 'Status',
+    // Exchanges
+    'exchange.disconnected': 'Desconectado',
+    'exchange.connected': 'Conectado',
+    'exchange.connect': 'Conectar',
+    'exchange.test': 'Testar',
+    'exchange.api-key': 'API Key',
+    'exchange.api-secret': 'API Secret',
+    'exchange.passphrase': 'Passphrase',
+    'exchange.use-testnet': 'Usar Testnet',
+    'exchange.use-demo': 'Usar Demo Trading',
+    'exchange.your-api-key': 'Sua API Key',
+    'exchange.your-api-secret': 'Sua API Secret',
+    'exchange.passphrase-api': 'Passphrase da API',
+    'exchange.bybit-desc': 'Exchange de criptomoedas com derivativos',
+    'exchange.okx-desc': 'Exchange global de criptomoedas',
+    'exchange.binance-desc': 'Maior exchange de criptomoedas do mundo',
+    'exchange.custom': 'Personalizada',
+    'exchange.custom-desc': 'Configure qualquer exchange compatível',
+    // Bot
+    'bot.stopped': 'Bot Parado',
+    'bot.running': 'Bot Rodando',
+    // Settings
+    'settings.general': 'Geral',
+    'settings.theme': 'Tema',
+    'settings.language': 'Idioma',
+    'settings.notify-trades': 'Notificar trades',
+    'settings.notify-analysis': 'Notificar análises',
+    'settings.sound-alerts': 'Alertas sonoros',
+    'settings.theme-dark': 'Escuro',
+    'settings.theme-light': 'Claro',
+    'settings.theme-midnight': 'Midnight',
+    'settings.theme-cyber': 'Cyber',
+    'settings.backup-restore': 'Backup & Restauração',
+    // Common
+    'common.connect': 'Conectar',
+    'common.disconnect': 'Desconectar',
+    'common.save': 'Salvar',
+    'common.cancel': 'Cancelar',
+    'common.close': 'Fechar',
+    'common.delete': 'Excluir',
+    'common.edit': 'Editar',
+    'common.start': 'Iniciar',
+    'common.stop': 'Parar',
+    'common.refresh': 'Atualizar',
+    'common.loading': 'Carregando...',
+    'common.error': 'Erro',
+    'common.success': 'Sucesso',
+    'common.warning': 'Aviso',
+    'common.info': 'Informação',
+  },
+  'en': {
+    // Navigation
+    'nav.dashboard': 'Dashboard',
+    'nav.wallet': 'Wallet',
+    'nav.exchanges': 'Exchanges',
+    'nav.ai-config': 'AI Config',
+    'nav.trading': 'Trading',
+    'nav.positions': 'Positions',
+    'nav.backtest': 'Backtest',
+    'nav.news': 'News',
+    'nav.ai-chat': 'AI Chat',
+    'nav.ai-automations': 'AI Automations',
+    'nav.gateway': 'Gateway',
+    'nav.risk': 'Risk',
+    'nav.settings': 'Settings',
+    // Page headers
+    'header.dashboard': 'Dashboard',
+    'header.wallet': 'Wallet',
+    'header.exchanges': 'Exchanges',
+    'header.ai-config': 'AI Configuration',
+    'header.trading': 'Trading',
+    'header.positions': 'Positions',
+    'header.backtest': 'Backtest',
+    'header.news': 'News & Sentiment',
+    'header.ai-chat': 'AI Chat',
+    'header.ai-automations': 'AI Automations',
+    'header.gateway': 'Notification Gateway',
+    'header.risk': 'Risk Management',
+    'header.settings': 'Settings',
+    // Dashboard stats
+    'stat.total-balance': 'Total Balance',
+    'stat.daily-pnl': "Today's P&L",
+    'stat.daily-trades': "Today's Trades",
+    'stat.current-risk': 'Current Risk',
+    'stat.risk-low': 'Low',
+    'stat.risk-medium': 'Medium',
+    'stat.risk-high': 'High',
+    // Dashboard sections
+    'dash.ai-learning': 'AI Learning Timeline',
+    'dash.clear-learning': 'Clear Learning',
+    'dash.ai-analysis': 'AI Analysis',
+    'dash.market': 'Market',
+    'dash.sentiment': 'Sentiment',
+    'dash.trade-history': 'Trade History',
+    'dash.analysis-history': 'AI Analysis History',
+    'dash.create-bot': 'Create Bot',
+    'dash.create-ai': 'Create AI',
+    'dash.update': 'Refresh',
+    'dash.clear': 'Clear',
+    'dash.disconnected': 'Disconnected',
+    'dash.neutral': 'Neutral',
+    'dash.analyses': 'analyses',
+    // Dashboard empty states
+    'empty.ai-analysis': 'Configure AI and start the bot to see analyses',
+    'empty.market': 'Connect an exchange to see data',
+    'empty.sentiment': 'Sentiment data will load automatically',
+    'empty.trades': 'No trades yet',
+    'empty.analyses': 'No analyses yet',
+    'empty.ai-learning': 'AI has not learned any blocks yet. When a coin fails, it will be avoided automatically.',
+    // Wallet
+    'wallet.total-balance': 'Total Balance',
+    'wallet.coins': 'Coins',
+    'wallet.active-exchange': 'Active Exchange',
+    'wallet.snapshots': 'Snapshots',
+    'wallet.update-balances': 'Update Balances',
+    'wallet.waiting': 'Waiting',
+    'wallet.balances-by-coin': 'Balances by Coin',
+    'wallet.balance-history': 'Balance History',
+    'wallet.clear-history': 'Clear History',
+    'wallet.no-balances': 'No balances loaded',
+    'wallet.no-snapshots': 'No balance snapshots yet',
+    // Wallet table headers
+    'wallet-th.coin': 'Coin',
+    'wallet-th.quantity': 'Quantity',
+    'wallet-th.available': 'Available',
+    'wallet-th.locked': 'Locked',
+    'wallet-th.value-usd': 'Value USD',
+    'wallet-th.wallets': 'Wallets',
+    // Trade table headers
+    'trade-th.time': 'Time',
+    'trade-th.pair': 'Pair',
+    'trade-th.side': 'Side',
+    'trade-th.price': 'Price',
+    'trade-th.qty': 'Qty',
+    'trade-th.pnl': 'P&L',
+    'trade-th.status': 'Status',
+    // Exchanges
+    'exchange.disconnected': 'Disconnected',
+    'exchange.connected': 'Connected',
+    'exchange.connect': 'Connect',
+    'exchange.test': 'Test',
+    'exchange.api-key': 'API Key',
+    'exchange.api-secret': 'API Secret',
+    'exchange.passphrase': 'Passphrase',
+    'exchange.use-testnet': 'Use Testnet',
+    'exchange.use-demo': 'Use Demo Trading',
+    'exchange.your-api-key': 'Your API Key',
+    'exchange.your-api-secret': 'Your API Secret',
+    'exchange.passphrase-api': 'API Passphrase',
+    'exchange.bybit-desc': 'Cryptocurrency exchange with derivatives',
+    'exchange.okx-desc': 'Global cryptocurrency exchange',
+    'exchange.binance-desc': 'World\'s largest cryptocurrency exchange',
+    'exchange.custom': 'Custom',
+    'exchange.custom-desc': 'Configure any compatible exchange',
+    // Bot
+    'bot.stopped': 'Bot Stopped',
+    'bot.running': 'Bot Running',
+    // Settings
+    'settings.general': 'General',
+    'settings.theme': 'Theme',
+    'settings.language': 'Language',
+    'settings.notify-trades': 'Notify trades',
+    'settings.notify-analysis': 'Notify analyses',
+    'settings.sound-alerts': 'Sound alerts',
+    'settings.theme-dark': 'Dark',
+    'settings.theme-light': 'Light',
+    'settings.theme-midnight': 'Midnight',
+    'settings.theme-cyber': 'Cyber',
+    'settings.backup-restore': 'Backup & Restore',
+    // Common
+    'common.connect': 'Connect',
+    'common.disconnect': 'Disconnect',
+    'common.save': 'Save',
+    'common.cancel': 'Cancel',
+    'common.close': 'Close',
+    'common.delete': 'Delete',
+    'common.edit': 'Edit',
+    'common.start': 'Start',
+    'common.stop': 'Stop',
+    'common.refresh': 'Refresh',
+    'common.loading': 'Loading...',
+    'common.error': 'Error',
+    'common.success': 'Success',
+    'common.warning': 'Warning',
+    'common.info': 'Information',
+  },
+  'es': {
+    // Navigation
+    'nav.dashboard': 'Dashboard',
+    'nav.wallet': 'Billetera',
+    'nav.exchanges': 'Exchanges',
+    'nav.ai-config': 'Config IA',
+    'nav.trading': 'Trading',
+    'nav.positions': 'Posiciones',
+    'nav.backtest': 'Backtest',
+    'nav.news': 'Noticias',
+    'nav.ai-chat': 'Chat IA',
+    'nav.ai-automations': 'Automatizaciones IA',
+    'nav.gateway': 'Gateway',
+    'nav.risk': 'Riesgo',
+    'nav.settings': 'Configuración',
+    // Page headers
+    'header.dashboard': 'Dashboard',
+    'header.wallet': 'Billetera',
+    'header.exchanges': 'Exchanges',
+    'header.ai-config': 'Configuración de IA',
+    'header.trading': 'Trading',
+    'header.positions': 'Posiciones',
+    'header.backtest': 'Backtest',
+    'header.news': 'Noticias & Sentimiento',
+    'header.ai-chat': 'Chat con IA',
+    'header.ai-automations': 'Automatizaciones de IA',
+    'header.gateway': 'Gateway de Notificaciones',
+    'header.risk': 'Gestión de Riesgo',
+    'header.settings': 'Configuración',
+    // Dashboard stats
+    'stat.total-balance': 'Saldo Total',
+    'stat.daily-pnl': 'P&L Hoy',
+    'stat.daily-trades': 'Trades Hoy',
+    'stat.current-risk': 'Riesgo Actual',
+    'stat.risk-low': 'Bajo',
+    'stat.risk-medium': 'Medio',
+    'stat.risk-high': 'Alto',
+    // Dashboard sections
+    'dash.ai-learning': 'Línea de aprendizaje de la IA',
+    'dash.clear-learning': 'Limpiar aprendizaje',
+    'dash.ai-analysis': 'Análisis de IA',
+    'dash.market': 'Mercado',
+    'dash.sentiment': 'Sentimiento',
+    'dash.trade-history': 'Historial de Trades',
+    'dash.analysis-history': 'Historial de Análisis de IA',
+    'dash.create-bot': 'Crear Bot',
+    'dash.create-ai': 'Crear IA',
+    'dash.update': 'Actualizar',
+    'dash.clear': 'Limpiar',
+    'dash.disconnected': 'Desconectado',
+    'dash.neutral': 'Neutral',
+    'dash.analyses': 'análisis',
+    // Dashboard empty states
+    'empty.ai-analysis': 'Configure la IA e inicie el bot para ver análisis',
+    'empty.market': 'Conecte un exchange para ver datos',
+    'empty.sentiment': 'Los datos de sentimiento se cargarán automáticamente',
+    'empty.trades': 'Sin trades realizados',
+    'empty.analyses': 'Sin análisis realizados aún',
+    'empty.ai-learning': 'La IA aún no ha aprendido bloqueos. Cuando una moneda falle, será evitada automáticamente.',
+    // Wallet
+    'wallet.total-balance': 'Saldo Total',
+    'wallet.coins': 'Monedas',
+    'wallet.active-exchange': 'Exchange Activo',
+    'wallet.snapshots': 'Snapshots',
+    'wallet.update-balances': 'Actualizar Saldos',
+    'wallet.waiting': 'Esperando',
+    'wallet.balances-by-coin': 'Saldos por Moneda',
+    'wallet.balance-history': 'Historial de Saldo',
+    'wallet.clear-history': 'Limpiar Historial',
+    'wallet.no-balances': 'Sin saldos cargados',
+    'wallet.no-snapshots': 'Sin snapshots de saldo aún',
+    // Wallet table headers
+    'wallet-th.coin': 'Moneda',
+    'wallet-th.quantity': 'Cantidad',
+    'wallet-th.available': 'Disponible',
+    'wallet-th.locked': 'Bloqueado',
+    'wallet-th.value-usd': 'Valor USD',
+    'wallet-th.wallets': 'Billeteras',
+    // Trade table headers
+    'trade-th.time': 'Hora',
+    'trade-th.pair': 'Par',
+    'trade-th.side': 'Lado',
+    'trade-th.price': 'Precio',
+    'trade-th.qty': 'Cant',
+    'trade-th.pnl': 'P&L',
+    'trade-th.status': 'Estado',
+    // Exchanges
+    'exchange.disconnected': 'Desconectado',
+    'exchange.connected': 'Conectado',
+    'exchange.connect': 'Conectar',
+    'exchange.test': 'Probar',
+    'exchange.api-key': 'API Key',
+    'exchange.api-secret': 'API Secret',
+    'exchange.passphrase': 'Passphrase',
+    'exchange.use-testnet': 'Usar Testnet',
+    'exchange.use-demo': 'Usar Demo Trading',
+    'exchange.your-api-key': 'Tu API Key',
+    'exchange.your-api-secret': 'Tu API Secret',
+    'exchange.passphrase-api': 'Passphrase de la API',
+    'exchange.bybit-desc': 'Exchange de criptomonedas con derivados',
+    'exchange.okx-desc': 'Exchange global de criptomonedas',
+    'exchange.binance-desc': 'Mayor exchange de criptomonedas del mundo',
+    'exchange.custom': 'Personalizado',
+    'exchange.custom-desc': 'Configure cualquier exchange compatible',
+    // Bot
+    'bot.stopped': 'Bot Detenido',
+    'bot.running': 'Bot Ejecutándose',
+    // Settings
+    'settings.general': 'General',
+    'settings.theme': 'Tema',
+    'settings.language': 'Idioma',
+    'settings.notify-trades': 'Notificar trades',
+    'settings.notify-analysis': 'Notificar análisis',
+    'settings.sound-alerts': 'Alertas sonoras',
+    'settings.theme-dark': 'Oscuro',
+    'settings.theme-light': 'Claro',
+    'settings.theme-midnight': 'Medianoche',
+    'settings.theme-cyber': 'Ciber',
+    'settings.backup-restore': 'Backup & Restauración',
+    // Common
+    'common.connect': 'Conectar',
+    'common.disconnect': 'Desconectar',
+    'common.save': 'Guardar',
+    'common.cancel': 'Cancelar',
+    'common.close': 'Cerrar',
+    'common.delete': 'Eliminar',
+    'common.edit': 'Editar',
+    'common.start': 'Iniciar',
+    'common.stop': 'Detener',
+    'common.refresh': 'Actualizar',
+    'common.loading': 'Cargando...',
+    'common.error': 'Error',
+    'common.success': 'Éxito',
+    'common.warning': 'Advertencia',
+    'common.info': 'Información',
+  }
+};
+
+// Translation map: CSS selector -> i18n key
+const i18nSelectorMap = {
+  // Navigation
+  '.nav-item[data-page="dashboard"] span': 'nav.dashboard',
+  '.nav-item[data-page="wallet"] span': 'nav.wallet',
+  '.nav-item[data-page="exchanges"] span': 'nav.exchanges',
+  '.nav-item[data-page="ai-config"] span': 'nav.ai-config',
+  '.nav-item[data-page="trading"] span': 'nav.trading',
+  '.nav-item[data-page="positions"] span': 'nav.positions',
+  '.nav-item[data-page="backtest"] span': 'nav.backtest',
+  '.nav-item[data-page="news"] span': 'nav.news',
+  '.nav-item[data-page="ai-chat"] span': 'nav.ai-chat',
+  '.nav-item[data-page="ai-automations"] span': 'nav.ai-automations',
+  '.nav-item[data-page="gateway"] span': 'nav.gateway',
+  '.nav-item[data-page="risk"] span': 'nav.risk',
+  '.nav-item[data-page="settings"] span': 'nav.settings',
+  // Page headers
+  '#page-dashboard .page-header h1': 'header.dashboard',
+  '#page-wallet .page-header h1': 'header.wallet',
+  '#page-exchanges .page-header h1': 'header.exchanges',
+  '#page-ai-config .page-header h1': 'header.ai-config',
+  '#page-trading .page-header h1': 'header.trading',
+  '#page-positions .page-header h1': 'header.positions',
+  '#page-backtest .page-header h1': 'header.backtest',
+  '#page-news .page-header h1': 'header.news',
+  '#page-ai-chat .page-header h1': 'header.ai-chat',
+  '#page-ai-automations .page-header h1': 'header.ai-automations',
+  '#page-gateway .page-header h1': 'header.gateway',
+  '#page-risk .page-header h1': 'header.risk',
+  '#page-settings .page-header h1': 'header.settings',
+  // Dashboard stats
+  '#total-balance': null, // dynamic value
+  '.stat-card:nth-child(1) .stat-label': 'stat.total-balance',
+  '.stat-card:nth-child(2) .stat-label': 'stat.daily-pnl',
+  '.stat-card:nth-child(3) .stat-label': 'stat.daily-trades',
+  '.stat-card:nth-child(4) .stat-label': 'stat.current-risk',
+  // Dashboard sections
+  '#ai-learning-card .card-header h3': 'dash.ai-learning',
+  '#ai-learning-card .btn-sm': 'dash.clear-learning',
+  '.card-large .card-header h3': 'dash.ai-analysis',
+  '#ai-status-badge': 'dash.disconnected',
+  // Settings labels
+  '#page-settings label': null, // handled separately
+  // Bot status
+  '#bot-status .status-text': 'bot.stopped',
+};
+
+function t(key, lang) {
+  const l = lang || state.currentLanguage || 'pt-BR';
+  return i18n[l]?.[key] || i18n['pt-BR']?.[key] || key;
+}
+
+function applyLanguage(lang) {
+  state.currentLanguage = lang || 'pt-BR';
+  document.documentElement.lang = state.currentLanguage;
+
+  // Apply translations using selector map
+  Object.entries(i18nSelectorMap).forEach(([selector, key]) => {
+    if (!key) return;
+    const elements = document.querySelectorAll(selector);
+    elements.forEach(el => {
+      el.textContent = t(key);
+    });
+  });
+
+  // Translate specific elements by ID
+  translateElement('total-balance-label', 'stat.total-balance');
+  translateElement('current-risk', 'stat.risk-low');
+
+  // Translate dashboard buttons
+  document.querySelectorAll('#page-dashboard .btn-outline svg + *').forEach(el => {
+    if (el.textContent.trim() === 'Criar Bot' || el.textContent.trim() === 'Create Bot' || el.textContent.trim() === 'Crear Bot') {
+      el.textContent = t('dash.create-bot');
+    }
+  });
+
+  // Dashboard create bot / create AI buttons (find by text)
+  translateButtonsByText('Criar Bot', t('dash.create-bot'));
+  translateButtonsByText('Create Bot', t('dash.create-bot'));
+  translateButtonsByText('Crear Bot', t('dash.create-bot'));
+  translateButtonsByText('Criar IA', t('dash.create-ai'));
+  translateButtonsByText('Create AI', t('dash.create-ai'));
+  translateButtonsByText('Crear IA', t('dash.create-ai'));
+
+  // Dashboard section headers (card headers)
+  translateCardHeaders();
+
+  // Settings page labels
+  translateSettingsLabels();
+
+  // Exchange cards
+  translateExchangeCards();
+
+  // Theme select options
+  translateThemeSelectOptions();
+
+  // Update sidebar toggle button title
+  const sidebarToggle = document.querySelector('.sidebar-toggle-titlebar');
+  if (sidebarToggle) sidebarToggle.title = t('nav.settings');
+  const sidebarCollapse = document.querySelector('.sidebar-collapse-btn');
+  if (sidebarCollapse) sidebarCollapse.title = '';
+
+  // Translate gauge label
+  const gaugeLabel = document.querySelector('.gauge-label');
+  if (gaugeLabel) gaugeLabel.textContent = t('dash.neutral');
+
+  // Translate trade table headers
+  translateTableHeaders();
+
+  // Translate wallet section
+  translateWalletSection();
+
+  // Translate bot status
+  translateBotStatus();
+
+  // Translate empty states
+  translateEmptyStates();
+}
+
+function translateElement(id, key) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = t(key);
+}
+
+function translateButtonsByText(oldText, newText) {
+  document.querySelectorAll('button').forEach(btn => {
+    const text = btn.textContent.trim();
+    if (text.includes(oldText)) {
+      // Only translate the text node, preserve SVG
+      btn.childNodes.forEach(node => {
+        if (node.nodeType === 3 && node.textContent.trim()) {
+          node.textContent = ' ' + newText + ' ';
+        }
+      });
+    }
+  });
+}
+
+function translateCardHeaders() {
+  // Dashboard cards
+  const headerMap = {
+    'Análise da IA': 'dash.ai-analysis',
+    'AI Analysis': 'dash.ai-analysis',
+    'Análisis de IA': 'dash.ai-analysis',
+    'Mercado': 'dash.market',
+    'Market': 'dash.market',
+    'Mercado': 'dash.market',
+    'Sentimento': 'dash.sentiment',
+    'Sentiment': 'dash.sentiment',
+    'Sentimiento': 'dash.sentiment',
+    'Histórico de Trades': 'dash.trade-history',
+    'Trade History': 'dash.trade-history',
+    'Historial de Trades': 'dash.trade-history',
+    'Histórico de Análises da IA': 'dash.analysis-history',
+    'AI Analysis History': 'dash.analysis-history',
+    'Historial de Análisis de IA': 'dash.analysis-history',
+  };
+
+  document.querySelectorAll('.card-header h3').forEach(h3 => {
+    const text = h3.textContent.trim();
+    const key = headerMap[text];
+    if (key) h3.textContent = t(key);
+  });
+
+  // Dashboard update button
+  document.querySelectorAll('#page-dashboard .btn-sm').forEach(btn => {
+    const text = btn.textContent.trim();
+    if (text === 'Atualizar' || text === 'Refresh' || text === 'Actualizar') {
+      if (!btn.querySelector('svg')) {
+        btn.textContent = t('dash.update');
+      }
+    }
+    if (text === 'Limpar' || text === 'Clear' || text === 'Limpiar') {
+      if (!btn.querySelector('svg')) {
+        btn.textContent = t('dash.clear');
+      }
+    }
+  });
+
+  // Analysis count badge
+  const countBadge = document.getElementById('analysis-count-badge');
+  if (countBadge) {
+    const count = countBadge.textContent.replace(/[^0-9]/g, '');
+    countBadge.textContent = `${count || 0} ${t('dash.analyses')}`;
+  }
+}
+
+function translateSettingsLabels() {
+  const settingsPage = document.getElementById('page-settings');
+  if (!settingsPage) return;
+
+  // Find the "Geral" card header
+  settingsPage.querySelectorAll('.card-header h3').forEach(h3 => {
+    const text = h3.textContent.trim();
+    if (text === 'Geral' || text === 'General') h3.textContent = t('settings.general');
+    if (text === 'Backup & Restauração' || text === 'Backup & Restore' || text === 'Backup & Restauración') h3.textContent = t('settings.backup-restore');
+  });
+
+  // Settings labels
+  settingsPage.querySelectorAll('.form-group > label').forEach(label => {
+    const text = label.textContent.trim();
+    if (text === 'Tema' || text === 'Theme') label.childNodes[0].textContent = t('settings.theme') + ' ';
+    if (text === 'Idioma' || text === 'Language') label.childNodes[0].textContent = t('settings.language') + ' ';
+  });
+
+  // Checkbox labels in settings
+  settingsPage.querySelectorAll('.checkbox-group label').forEach(label => {
+    const checkbox = label.querySelector('input[type="checkbox"]');
+    if (!checkbox) return;
+    const id = checkbox.id;
+    if (id === 'notify-trades') label.childNodes[label.childNodes.length - 1].textContent = ' ' + t('settings.notify-trades');
+    if (id === 'notify-analysis') label.childNodes[label.childNodes.length - 1].textContent = ' ' + t('settings.notify-analysis');
+    if (id === 'sound-alerts') label.childNodes[label.childNodes.length - 1].textContent = ' ' + t('settings.sound-alerts');
+  });
+}
+
+function translateThemeSelectOptions() {
+  const themeSelect = document.getElementById('app-theme');
+  if (!themeSelect) return;
+  const optionMap = {
+    'dark': 'settings.theme-dark',
+    'light': 'settings.theme-light',
+    'midnight': 'settings.theme-midnight',
+    'cyber': 'settings.theme-cyber',
+  };
+  themeSelect.querySelectorAll('option').forEach(opt => {
+    const key = optionMap[opt.value];
+    if (key) opt.textContent = t(key);
+  });
+
+  // Language select options - keep native names
+  const langSelect = document.getElementById('app-language');
+  if (!langSelect) return;
+  if (state.currentLanguage === 'en') {
+    langSelect.querySelector('option[value="pt-BR"]').textContent = 'Portuguese (Brazil)';
+    langSelect.querySelector('option[value="en"]').textContent = 'English';
+    langSelect.querySelector('option[value="es"]').textContent = 'Spanish';
+  } else if (state.currentLanguage === 'es') {
+    langSelect.querySelector('option[value="pt-BR"]').textContent = 'Portugués (Brasil)';
+    langSelect.querySelector('option[value="en"]').textContent = 'Inglés';
+    langSelect.querySelector('option[value="es"]').textContent = 'Español';
+  } else {
+    langSelect.querySelector('option[value="pt-BR"]').textContent = 'Português (Brasil)';
+    langSelect.querySelector('option[value="en"]').textContent = 'English';
+    langSelect.querySelector('option[value="es"]').textContent = 'Español';
+  }
+}
+
+function translateExchangeCards() {
+  // Exchange descriptions
+  const descMap = {
+    'Exchange de criptomoedas com derivativos': 'exchange.bybit-desc',
+    'Cryptocurrency exchange with derivatives': 'exchange.bybit-desc',
+    'Exchange de criptomonedas con derivados': 'exchange.bybit-desc',
+    'Exchange global de criptomoedas': 'exchange.okx-desc',
+    'Global cryptocurrency exchange': 'exchange.okx-desc',
+    'Exchange global de criptomonedas': 'exchange.okx-desc',
+    'Maior exchange de criptomoedas do mundo': 'exchange.binance-desc',
+    'World\'s largest cryptocurrency exchange': 'exchange.binance-desc',
+    'Mayor exchange de criptomonedas del mundo': 'exchange.binance-desc',
+  };
+
+  document.querySelectorAll('.exchange-desc').forEach(el => {
+    const key = descMap[el.textContent.trim()];
+    if (key) el.textContent = t(key);
+  });
+
+  // Custom exchange name
+  document.querySelectorAll('.exchange-brand h3').forEach(h3 => {
+    if (h3.textContent.trim() === 'Personalizada' || h3.textContent.trim() === 'Custom' || h3.textContent.trim() === 'Personalizado') {
+      h3.textContent = t('exchange.custom');
+    }
+  });
+  document.querySelectorAll('.custom-exchange .exchange-desc').forEach(el => {
+    el.textContent = t('exchange.custom-desc');
+  });
+
+  // Exchange status
+  document.querySelectorAll('.exchange-status').forEach(el => {
+    const text = el.textContent.trim();
+    if (text.includes('Desconectado') || text.includes('Disconnected') || text.includes('Desconectado')) {
+      el.innerHTML = '<span class="status-dot offline"></span> ' + t('exchange.disconnected');
+    }
+  });
+
+  // Connect/Test buttons
+  document.querySelectorAll('.exchange-form .btn-primary').forEach(btn => {
+    btn.textContent = t('exchange.connect');
+  });
+  document.querySelectorAll('.exchange-form .btn-outline').forEach(btn => {
+    const text = btn.textContent.trim();
+    if (text === 'Testar' || text === 'Test' || text === 'Probar') {
+      btn.textContent = t('exchange.test');
+    }
+  });
+
+  // Form labels
+  document.querySelectorAll('.exchange-form .form-group > label').forEach(label => {
+    const text = label.textContent.trim();
+    if (text === 'API Key') label.textContent = t('exchange.api-key');
+    if (text === 'API Secret') label.textContent = t('exchange.api-secret');
+    if (text === 'Passphrase') label.textContent = t('exchange.passphrase');
+  });
+
+  // Placeholders
+  document.querySelectorAll('.exchange-form input[placeholder]').forEach(input => {
+    const ph = input.placeholder;
+    if (ph === 'Sua API Key' || ph === 'Your API Key' || ph === 'Tu API Key') input.placeholder = t('exchange.your-api-key');
+    if (ph === 'Sua API Secret' || ph === 'Your API Secret' || ph === 'Tu API Secret') input.placeholder = t('exchange.your-api-secret');
+    if (ph === 'Passphrase da API' || ph === 'API Passphrase' || ph === 'Passphrase de la API') input.placeholder = t('exchange.passphrase-api');
+  });
+
+  // Checkbox labels
+  document.querySelectorAll('.exchange-form .checkbox-group label').forEach(label => {
+    const checkbox = label.querySelector('input[type="checkbox"]');
+    if (!checkbox) return;
+    const id = checkbox.id;
+    if (id && id.includes('testnet')) {
+      label.childNodes[label.childNodes.length - 1].textContent = ' ' + t('exchange.use-testnet');
+    }
+    if (id && id.includes('demo')) {
+      label.childNodes[label.childNodes.length - 1].textContent = ' ' + t('exchange.use-demo');
+    }
+  });
+}
+
+function translateTableHeaders() {
+  // Trade table
+  const tradeTable = document.getElementById('trades-table');
+  if (tradeTable) {
+    const headers = tradeTable.querySelectorAll('thead th');
+    const tradeKeys = ['trade-th.time', 'trade-th.pair', 'trade-th.side', 'trade-th.price', 'trade-th.qty', 'trade-th.pnl', 'trade-th.status'];
+    headers.forEach((th, i) => {
+      if (tradeKeys[i]) th.textContent = t(tradeKeys[i]);
+    });
+  }
+  // Empty row
+  const emptyRow = document.querySelector('#trades-tbody .empty-row');
+  if (emptyRow) emptyRow.textContent = t('empty.trades');
+}
+
+function translateWalletSection() {
+  // Wallet stat labels
+  const walletStatLabels = document.querySelectorAll('#page-wallet .stat-label');
+  const walletStatKeys = ['wallet.total-balance', 'wallet.coins', 'wallet.active-exchange', 'wallet.snapshots'];
+  walletStatLabels.forEach((el, i) => {
+    if (walletStatKeys[i]) el.textContent = t(walletStatKeys[i]);
+  });
+
+  // Wallet header buttons
+  document.querySelectorAll('#page-wallet .btn-primary').forEach(btn => {
+    const text = btn.textContent.trim();
+    if (text === 'Atualizar Saldos' || text === 'Update Balances' || text === 'Actualizar Saldos') {
+      btn.textContent = t('wallet.update-balances');
+    }
+  });
+
+  // Wallet badge
+  const walletBadge = document.getElementById('wallet-last-update');
+  if (walletBadge) {
+    const text = walletBadge.textContent.trim();
+    if (text === 'Aguardando' || text === 'Waiting' || text === 'Esperando') {
+      walletBadge.textContent = t('wallet.waiting');
+    }
+  }
+
+  // Wallet card headers
+  document.querySelectorAll('#page-wallet .card-header h3').forEach(h3 => {
+    const text = h3.textContent.trim();
+    if (text === 'Saldos por Moeda' || text === 'Balances by Coin' || text === 'Saldos por Moneda') {
+      h3.textContent = t('wallet.balances-by-coin');
+    }
+    if (text === 'Histórico de Saldo' || text === 'Balance History' || text === 'Historial de Saldo') {
+      h3.textContent = t('wallet.balance-history');
+    }
+  });
+
+  // Wallet table headers
+  const walletTable = document.querySelector('#page-wallet table');
+  if (walletTable) {
+    const headers = walletTable.querySelectorAll('thead th');
+    const walletKeys = ['wallet-th.coin', 'wallet-th.quantity', 'wallet-th.available', 'wallet-th.locked', 'wallet-th.value-usd', 'wallet-th.wallets'];
+    headers.forEach((th, i) => {
+      if (walletKeys[i]) th.textContent = t(walletKeys[i]);
+    });
+  }
+
+  // Wallet empty states
+  const walletEmpty = document.querySelector('#wallet-balances-tbody .empty-row');
+  if (walletEmpty) walletEmpty.textContent = t('wallet.no-balances');
+
+  // Clear history button
+  document.querySelectorAll('#page-wallet .btn-outline').forEach(btn => {
+    const text = btn.textContent.trim();
+    if (text === 'Limpar Histórico' || text === 'Clear History' || text === 'Limpiar Historial') {
+      btn.textContent = t('wallet.clear-history');
+    }
+  });
+}
+
+function translateBotStatus() {
+  const statusText = document.querySelector('#bot-status .status-text');
+  if (statusText) {
+    if (state.botRunning) {
+      statusText.textContent = t('bot.running');
+    } else {
+      statusText.textContent = t('bot.stopped');
+    }
+  }
+}
+
+function translateEmptyStates() {
+  document.querySelectorAll('.empty-state p').forEach(p => {
+    const text = p.textContent.trim();
+    if (text === 'Configure a IA e inicie o bot para ver análises' ||
+        text === 'Configure AI and start the bot to see analyses' ||
+        text === 'Configure la IA e inicie el bot para ver análisis') {
+      p.textContent = t('empty.ai-analysis');
+    }
+    if (text === 'Conecte uma corretora para ver dados' ||
+        text === 'Connect an exchange to see data' ||
+        text === 'Conecte un exchange para ver datos') {
+      p.textContent = t('empty.market');
+    }
+    if (text === 'Dados de sentimento carregarão automaticamente' ||
+        text === 'Sentiment data will load automatically' ||
+        text === 'Los datos de sentimiento se cargarán automáticamente') {
+      p.textContent = t('empty.sentiment');
+    }
+    if (text === 'Nenhuma análise realizada ainda' ||
+        text === 'No analyses yet' ||
+        text === 'Sin análisis realizados aún') {
+      p.textContent = t('empty.analyses');
+    }
+    if (text === 'A IA ainda não aprendeu bloqueios. Quando uma moeda falhar, ela será evitada automaticamente.' ||
+        text === 'AI has not learned any blocks yet. When a coin fails, it will be avoided automatically.' ||
+        text.startsWith('La IA aún no ha aprendido')) {
+      p.textContent = t('empty.ai-learning');
+    }
+    if (text === 'Nenhum snapshot de saldo ainda' ||
+        text === 'No balance snapshots yet' ||
+        text === 'Sin snapshots de saldo aún') {
+      p.textContent = t('wallet.no-snapshots');
+    }
+  });
+}
 
 // ===== Navigation =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -70,7 +930,14 @@ document.addEventListener('DOMContentLoaded', () => {
   restoreCachedAIModels();
   document.getElementById('app-language')?.addEventListener('change', () => {
     saveConfig();
-    addLog('info', `Idioma das respostas da IA alterado para ${getSelectedLanguage()}`);
+    applyLanguage(getSelectedLanguage());
+    addLog('info', `Idioma alterado para ${getSelectedLanguage()}`);
+  });
+  document.getElementById('app-theme')?.addEventListener('change', () => {
+    const theme = document.getElementById('app-theme').value;
+    applyTheme(theme);
+    addLog('info', `Tema alterado para ${getThemeDisplayName(theme)}`);
+    saveConfig();
   });
   ['bot-paper-mode', 'bot-multi-symbols', 'bot-symbol-list'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', () => { saveConfig(); updatePositionsUI(); });
@@ -561,8 +1428,11 @@ async function importFullBackup(inputEl) {
     }
 
     // App settings
-    if (config.appTheme && document.getElementById('app-theme')) document.getElementById('app-theme').value = config.appTheme;
-    if (config.appLanguage && document.getElementById('app-language')) document.getElementById('app-language').value = config.appLanguage;
+    if (config.appTheme) applyTheme(config.appTheme);
+    if (config.appLanguage) {
+      document.getElementById('app-language').value = config.appLanguage;
+      applyLanguage(config.appLanguage);
+    }
     if (config.monitorPairs && document.getElementById('monitor-pairs')) {
       document.getElementById('monitor-pairs').value = config.monitorPairs;
       state.coinSelectorSelected = new Set(config.monitorPairs.split(',').map(p => p.trim().toUpperCase()).filter(Boolean));
@@ -787,11 +1657,11 @@ function updateExchangeStatus(exchange, connected) {
     if (connected) {
       dot.classList.remove('offline');
       dot.classList.add('online');
-      statusEl.lastChild.textContent = ' Conectado';
+      statusEl.lastChild.textContent = ' ' + t('exchange.connected');
     } else {
       dot.classList.remove('online');
       dot.classList.add('offline');
-      statusEl.lastChild.textContent = ' Desconectado';
+      statusEl.lastChild.textContent = ' ' + t('exchange.disconnected');
     }
   }
 }
@@ -3121,6 +3991,7 @@ function saveConfig() {
       totalBalance: state.totalBalance,
       balanceDetails: state.balanceDetails,
       appLanguage: getSelectedLanguage(),
+      appTheme: document.documentElement.getAttribute('data-theme') || 'dark',
       monitorPairs: document.getElementById('monitor-pairs')?.value || '',
       botAdvancedConfig: {
         paperMode: document.getElementById('bot-paper-mode')?.checked !== false,
@@ -3145,6 +4016,10 @@ function loadSavedConfig() {
       if (config.activeAI) state.activeAI = config.activeAI;
       if (config.appLanguage && document.getElementById('app-language')) {
         document.getElementById('app-language').value = config.appLanguage;
+        applyLanguage(config.appLanguage);
+      }
+      if (config.appTheme) {
+        applyTheme(config.appTheme);
       }
       if (config.monitorPairs && document.getElementById('monitor-pairs')) {
         document.getElementById('monitor-pairs').value = config.monitorPairs;
@@ -3729,19 +4604,58 @@ function addLog(type, message) {
 }
 
 // ===== Theme Management =====
+const themeNames = {
+  dark: { 'pt-BR': 'Escuro', en: 'Dark', es: 'Oscuro' },
+  light: { 'pt-BR': 'Claro', en: 'Light', es: 'Claro' },
+  midnight: { 'pt-BR': 'Midnight', en: 'Midnight', es: 'Medianoche' },
+  cyber: { 'pt-BR': 'Cyber', en: 'Cyber', es: 'Ciber' }
+};
+
+function getThemeDisplayName(theme) {
+  const lang = getSelectedLanguage();
+  return themeNames[theme]?.[lang] || themeNames[theme]?.['pt-BR'] || theme;
+}
+
+function applyTheme(theme) {
+  const validThemes = ['dark', 'light', 'midnight', 'cyber'];
+  if (!validThemes.includes(theme)) theme = 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('cryptoai-theme', theme);
+  // Sync settings dropdown
+  const themeSelect = document.getElementById('app-theme');
+  if (themeSelect) themeSelect.value = theme;
+  // Update theme toggle visual
+  updateThemeToggleUI(theme);
+}
+
 function toggleTheme() {
-  const html = document.documentElement;
-  const currentTheme = html.getAttribute('data-theme') || 'dark';
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  html.setAttribute('data-theme', newTheme);
-  localStorage.setItem('cryptoai-theme', newTheme);
-  addLog('info', `Tema alterado para ${newTheme === 'dark' ? 'escuro' : 'claro'}`);
+  const currentTheme = document.documentElement.getAttribute('data-theme') || 'dark';
+  // Cycle through themes: dark -> light -> midnight -> cyber -> dark
+  const themeOrder = ['dark', 'light', 'midnight', 'cyber'];
+  const currentIndex = themeOrder.indexOf(currentTheme);
+  const nextTheme = themeOrder[(currentIndex + 1) % themeOrder.length];
+  applyTheme(nextTheme);
+  addLog('info', `Tema alterado para ${getThemeDisplayName(nextTheme)}`);
+  saveConfig();
+}
+
+function updateThemeToggleUI(theme) {
+  const switchEl = document.getElementById('theme-switch');
+  const iconDark = document.getElementById('theme-icon-dark');
+  const iconLight = document.getElementById('theme-icon-light');
+  if (!switchEl) return;
+  // Visual position of toggle based on theme
+  if (theme === 'light') {
+    switchEl.style.transform = 'translateX(18px)';
+  } else {
+    switchEl.style.transform = '';
+  }
 }
 
 function loadSavedTheme() {
   const savedTheme = localStorage.getItem('cryptoai-theme');
   if (savedTheme) {
-    document.documentElement.setAttribute('data-theme', savedTheme);
+    applyTheme(savedTheme);
   }
 }
 
@@ -4192,7 +5106,7 @@ function updateCryptoBotUI() {
     // Also update the sidebar bot status
     const sidebarBotStatus = document.getElementById('bot-status');
     if (sidebarBotStatus) {
-      sidebarBotStatus.innerHTML = '<span class="status-dot online"></span><span class="status-text">Bot Ativo</span>';
+      sidebarBotStatus.innerHTML = `<span class="status-dot online"></span><span class="status-text">${t('bot.running')}</span>`;
     }
   } else {
     if (btn) {
@@ -4205,7 +5119,7 @@ function updateCryptoBotUI() {
 
     const sidebarBotStatus = document.getElementById('bot-status');
     if (sidebarBotStatus) {
-      sidebarBotStatus.innerHTML = '<span class="status-dot offline"></span><span class="status-text">Bot Parado</span>';
+      sidebarBotStatus.innerHTML = `<span class="status-dot offline"></span><span class="status-text">${t('bot.stopped')}</span>`;
     }
   }
 }
