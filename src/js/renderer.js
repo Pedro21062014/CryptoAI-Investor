@@ -207,6 +207,479 @@ async function clearSecureCredentials() {
   }
 }
 
+// ===== Backup / Restore (Export/Import All Configs) =====
+function collectAllConfigForBackup() {
+  // Coleta TODAS as configuracoes do app, incluindo API keys completas
+  const exchangeConfigs = {};
+  Object.keys(state.exchangeConfigs || {}).forEach(ex => {
+    const conf = state.exchangeConfigs[ex] || {};
+    // Pega os valores dos inputs para garantir que temos os dados mais atuais
+    exchangeConfigs[ex] = {
+      exchange: ex,
+      apiKey: document.getElementById(`${ex}-apikey`)?.value || conf.apiKey || '',
+      apiSecret: document.getElementById(`${ex}-apisecret`)?.value || conf.apiSecret || '',
+      testnet: document.getElementById(`${ex}-testnet`)?.checked || conf.testnet || false,
+      demo: document.getElementById(`${ex}-demo`)?.checked || conf.demo || false,
+      ...(ex === 'okx' ? { passphrase: document.getElementById('okx-passphrase')?.value || conf.passphrase || '' } : {}),
+      ...(ex === 'custom' ? {
+        baseUrl: document.getElementById('custom-baseurl')?.value || conf.baseUrl || '',
+        name: document.getElementById('custom-name')?.value || conf.name || 'Custom'
+      } : {})
+    };
+  });
+
+  const aiConfigs = {};
+  Object.keys(state.aiConfigs || {}).forEach(provider => {
+    const conf = state.aiConfigs[provider] || {};
+    aiConfigs[provider] = {
+      provider: provider,
+      apiKey: document.getElementById(`${provider}-apikey`)?.value || conf.apiKey || '',
+      model: (() => {
+        const sel = document.getElementById(`${provider}-model`);
+        if (sel && sel.value === 'custom') {
+          return document.getElementById(`${provider}-model-custom`)?.value || conf.model || 'default';
+        }
+        return sel?.value || conf.model || 'default';
+      })(),
+      temperature: parseFloat(document.getElementById(`${provider}-temperature`)?.value || conf.temperature || 0.3),
+    };
+  });
+
+  // Model selections
+  const modelSelections = {};
+  ['deepseek', 'openai', 'google', 'nvidia', 'claude', 'openrouter'].forEach(p => {
+    const sel = document.getElementById(`${p}-model`);
+    const custom = document.getElementById(`${p}-model-custom`);
+    if (sel) {
+      modelSelections[p] = {
+        model: sel.value,
+        customModel: custom?.value || ''
+      };
+    }
+  });
+
+  // Gateway config
+  let gatewayConfig = {};
+  try { gatewayConfig = JSON.parse(localStorage.getItem('cryptoai-gateway-config') || '{}'); } catch (e) {}
+
+  // AI Learning
+  let aiLearning = {};
+  try { aiLearning = JSON.parse(localStorage.getItem('cryptoai-ai-learning') || '{}'); } catch (e) {}
+
+  // AI Automations
+  let aiAutomations = [];
+  try { aiAutomations = JSON.parse(localStorage.getItem('cryptoai-ai-automations') || '[]'); } catch (e) {}
+
+  // Balance history
+  let balanceHistory = [];
+  try { balanceHistory = JSON.parse(localStorage.getItem('cryptoai-balance-history') || '[]'); } catch (e) {}
+
+  // Paper trading
+  let paperTrading = {};
+  try { paperTrading = JSON.parse(localStorage.getItem('cryptoai-paper-trading') || '{}'); } catch (e) {}
+
+  // AI Chat messages
+  let aiChatMessages = [];
+  try { aiChatMessages = JSON.parse(localStorage.getItem('cryptoai-ai-chat-messages') || '[]'); } catch (e) {}
+
+  // Analysis history
+  let analysisHistory = [];
+  try { analysisHistory = JSON.parse(localStorage.getItem('cryptoai-analysis-history') || '[]'); } catch (e) {}
+
+  // Coin selector cache
+  let coinSelectorCache = {};
+  try { coinSelectorCache = JSON.parse(localStorage.getItem('cryptoai-coin-selector-cache') || '{}'); } catch (e) {}
+
+  // Model cache
+  let modelCache = {};
+  try { modelCache = JSON.parse(localStorage.getItem('cryptoai-model-cache') || '{}'); } catch (e) {}
+
+  // Min order config
+  const minOrderUsdt = localStorage.getItem('cryptoai-ai-min-order-usdt') || '5';
+
+  return {
+    exportVersion: 1,
+    exportedAt: new Date().toISOString(),
+    exportedBy: 'CryptoAI Investor',
+    // Core configs
+    exchangeConfigs,
+    aiConfigs,
+    activeExchange: state.activeExchange,
+    activeAI: state.activeAI,
+    riskConfig: state.riskConfig,
+    modelSelections,
+    // App settings
+    appTheme: document.getElementById('app-theme')?.value || 'dark',
+    appLanguage: getSelectedLanguage(),
+    monitorPairs: document.getElementById('monitor-pairs')?.value || '',
+    notifyTrades: document.getElementById('notify-trades')?.checked ?? true,
+    notifyAnalysis: document.getElementById('notify-analysis')?.checked ?? true,
+    soundAlerts: document.getElementById('sound-alerts')?.checked ?? true,
+    minOrderUsdt,
+    // Bot configs
+    botAdvancedConfig: {
+      paperMode: document.getElementById('bot-paper-mode')?.checked !== false,
+      multiSymbols: document.getElementById('bot-multi-symbols')?.checked || false,
+      symbolList: document.getElementById('bot-symbol-list')?.value || '',
+      interval: document.getElementById('bot-interval')?.value || '60',
+      minConfidence: document.getElementById('bot-min-confidence')?.value || '72',
+      autoTrade: document.getElementById('bot-auto-trade')?.checked || false,
+      requireNewsAlignment: document.getElementById('bot-require-news-alignment')?.checked !== false,
+      newsContinuous: document.getElementById('bot-news-continuous')?.checked !== false,
+    },
+    // Extra data
+    trades: state.trades,
+    aiMetrics: state.aiMetrics,
+    totalBalance: state.totalBalance,
+    balanceDetails: state.balanceDetails,
+    // Full data from localStorage
+    gatewayConfig,
+    aiLearning,
+    aiAutomations,
+    balanceHistory,
+    paperTrading,
+    aiChatMessages,
+    analysisHistory,
+    coinSelectorCache,
+    modelCache,
+  };
+}
+
+async function exportFullBackup() {
+  const confirmed = confirm(
+    '⚠️ ATENÇÃO\n\n' +
+    'O arquivo de backup conterá TODAS as suas configurações, incluindo:\n' +
+    '• API Keys da Binance, Bybit, OKX e outras corretoras\n' +
+    '• API Keys da IA (DeepSeek, OpenAI, Claude, etc.)\n' +
+    '• Configurações de risco, bot, gateway e automações\n\n' +
+    'O arquivo será criptografado no formato .cryptoai exclusivo do app.\n' +
+    'Guarde-o em um local SEGURO e nunca o compartilhe!\n\n' +
+    'Deseja continuar com a exportação?'
+  );
+  if (!confirmed) return;
+
+  try {
+    const statusEl = document.getElementById('backup-status');
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent-cyan);">⏳ Coletando e criptografando configurações...</span>';
+
+    const allConfig = collectAllConfigForBackup();
+
+    if (!window.electronAPI?.backupExport) {
+      showToast('Função de backup não disponível', 'error');
+      return;
+    }
+
+    const result = await window.electronAPI.backupExport(allConfig);
+
+    if (!result.success) {
+      showToast('Erro ao criar backup: ' + result.error, 'error');
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--accent-red);">❌ Erro: ${result.error}</span>`;
+      addLog('error', `Backup falhou: ${result.error}`);
+      return;
+    }
+
+    // Download the encrypted backup as .cryptoai file
+    const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    a.href = url;
+    a.download = `CryptoAI-Backup-${timestamp}.cryptoai`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast('Backup exportado com sucesso! Guarde o arquivo em local seguro.', 'success');
+    addLog('success', `Backup exportado: ${a.download} (${(blob.size / 1024).toFixed(1)} KB criptografado)`);
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--accent-green);">✅ Backup exportado: ${a.download}</span>`;
+  } catch (err) {
+    showToast('Erro ao exportar: ' + err.message, 'error');
+    addLog('error', `Erro no backup: ${err.message}`);
+  }
+}
+
+async function importFullBackup(inputEl) {
+  const file = inputEl?.files?.[0];
+  if (!file) return;
+
+  // Verificar extensão
+  if (!file.name.endsWith('.cryptoai')) {
+    showToast('Arquivo inválido! Use apenas arquivos .cryptoai exportados pelo CryptoAI Investor.', 'error');
+    inputEl.value = '';
+    return;
+  }
+
+  try {
+    const statusEl = document.getElementById('backup-status');
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent-cyan);">⏳ Lendo e validando arquivo de backup...</span>';
+
+    // Read file
+    const fileContent = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = () => reject(new Error('Falha ao ler arquivo'));
+      reader.readAsText(file);
+    });
+
+    let backupData;
+    try {
+      backupData = JSON.parse(fileContent);
+    } catch (e) {
+      showToast('Arquivo corrompido ou formato inválido.', 'error');
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent-red);">❌ Arquivo inválido ou corrompido</span>';
+      inputEl.value = '';
+      return;
+    }
+
+    // Validate file signature
+    if (!window.electronAPI?.backupValidateFile) {
+      showToast('Função de validação não disponível', 'error');
+      inputEl.value = '';
+      return;
+    }
+
+    const validation = await window.electronAPI.backupValidateFile(backupData);
+    if (!validation.valid) {
+      showToast('Arquivo não é um backup válido do CryptoAI Investor!', 'error');
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--accent-red);">❌ ${validation.error}</span>`;
+      inputEl.value = '';
+      return;
+    }
+
+    // Show details and confirm
+    const backupDate = validation.createdAt ? new Date(validation.createdAt).toLocaleString('pt-BR') : 'Desconhecida';
+    const confirmed = confirm(
+      '📂 RESTAURAR BACKUP\n\n' +
+      `Data do backup: ${backupDate}\n` +
+      `App: ${validation.app || 'CryptoAI Investor'}\n` +
+      `Versão: ${validation.version}\n\n` +
+      '⚠️ Isso vai SUBSTITUIR TODAS as suas configurações atuais com as do backup, incluindo:\n' +
+      '• API Keys de corretoras (Binance, Bybit, OKX, etc.)\n' +
+      '• API Keys de IA (DeepSeek, OpenAI, Claude, etc.)\n' +
+      '• Configurações de risco, bot, gateway e automações\n' +
+      '• Posições paper trading e histórico\n\n' +
+      'Tem certeza que deseja continuar?'
+    );
+
+    if (!confirmed) {
+      if (statusEl) statusEl.innerHTML = '<span style="color:var(--text-muted);">Importação cancelada</span>';
+      inputEl.value = '';
+      return;
+    }
+
+    if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent-cyan);">⏳ Descriptografando e aplicando configurações...</span>';
+
+    // Decrypt
+    if (!window.electronAPI?.backupImport) {
+      showToast('Função de importação não disponível', 'error');
+      inputEl.value = '';
+      return;
+    }
+
+    const result = await window.electronAPI.backupImport(backupData);
+    if (!result.success) {
+      showToast('Erro ao importar backup: ' + result.error, 'error');
+      if (statusEl) statusEl.innerHTML = `<span style="color:var(--accent-red);">❌ ${result.error}</span>`;
+      addLog('error', `Importação falhou: ${result.error}`);
+      inputEl.value = '';
+      return;
+    }
+
+    const config = result.data;
+    let restoredCount = 0;
+
+    // ===== Apply all configurations =====
+
+    // Exchange configs (with full API keys!)
+    if (config.exchangeConfigs) {
+      state.exchangeConfigs = config.exchangeConfigs;
+      Object.keys(config.exchangeConfigs).forEach(ex => {
+        const conf = config.exchangeConfigs[ex];
+        if (document.getElementById(`${ex}-apikey`)) document.getElementById(`${ex}-apikey`).value = conf.apiKey || '';
+        if (document.getElementById(`${ex}-apisecret`)) document.getElementById(`${ex}-apisecret`).value = conf.apiSecret || '';
+        if (document.getElementById(`${ex}-testnet`)) document.getElementById(`${ex}-testnet`).checked = !!conf.testnet;
+        if (document.getElementById(`${ex}-demo`)) document.getElementById(`${ex}-demo`).checked = !!conf.demo;
+        if (ex === 'okx' && document.getElementById('okx-passphrase')) document.getElementById('okx-passphrase').value = conf.passphrase || '';
+        if (ex === 'custom') {
+          if (document.getElementById('custom-baseurl')) document.getElementById('custom-baseurl').value = conf.baseUrl || '';
+          if (document.getElementById('custom-name')) document.getElementById('custom-name').value = conf.name || 'Custom';
+        }
+        if (conf.apiKey && conf.apiSecret) {
+          updateExchangeStatus(ex, true);
+          restoredCount++;
+        }
+      });
+      // Also save to secure credentials
+      saveSecureCredentials();
+    }
+
+    // AI configs (with full API keys!)
+    if (config.aiConfigs) {
+      state.aiConfigs = config.aiConfigs;
+      Object.keys(config.aiConfigs).forEach(provider => {
+        const conf = config.aiConfigs[provider];
+        if (document.getElementById(`${provider}-apikey`)) document.getElementById(`${provider}-apikey`).value = conf.apiKey || '';
+        if (conf.apiKey) {
+          updateAIStatusUI(provider, provider === config.activeAI);
+          restoredCount++;
+        }
+      });
+      // Also save to secure credentials
+      saveSecureCredentials();
+    }
+
+    // Active exchange and AI
+    if (config.activeExchange) state.activeExchange = config.activeExchange;
+    if (config.activeAI) state.activeAI = config.activeAI;
+
+    // Risk config
+    if (config.riskConfig) {
+      Object.assign(state.riskConfig, config.riskConfig);
+      if (document.getElementById('max-loss')) document.getElementById('max-loss').value = config.riskConfig.maxLoss || 5;
+      if (document.getElementById('max-drawdown')) document.getElementById('max-drawdown').value = config.riskConfig.maxDrawdown || 15;
+      if (document.getElementById('max-position-size')) document.getElementById('max-position-size').value = config.riskConfig.maxPositionSize || 10;
+      if (document.getElementById('max-daily-trades')) document.getElementById('max-daily-trades').value = config.riskConfig.maxDailyTrades || 10;
+      if (document.getElementById('investment-style')) document.getElementById('investment-style').value = config.riskConfig.investmentStyle || 'moderate';
+      if (document.getElementById('loss-cooldown')) document.getElementById('loss-cooldown').value = config.riskConfig.lossCooldown || 30;
+    }
+
+    // Model selections
+    if (config.modelSelections) {
+      Object.keys(config.modelSelections).forEach(p => {
+        const sel = document.getElementById(`${p}-model`);
+        const custom = document.getElementById(`${p}-model-custom`);
+        const saved = config.modelSelections[p];
+        if (sel && saved.model) {
+          sel.value = saved.model;
+          if (sel.value === 'custom' && custom) {
+            custom.style.display = 'block';
+            custom.value = saved.customModel || '';
+          }
+        }
+      });
+    }
+
+    // App settings
+    if (config.appTheme && document.getElementById('app-theme')) document.getElementById('app-theme').value = config.appTheme;
+    if (config.appLanguage && document.getElementById('app-language')) document.getElementById('app-language').value = config.appLanguage;
+    if (config.monitorPairs && document.getElementById('monitor-pairs')) {
+      document.getElementById('monitor-pairs').value = config.monitorPairs;
+      state.coinSelectorSelected = new Set(config.monitorPairs.split(',').map(p => p.trim().toUpperCase()).filter(Boolean));
+    }
+    if (config.notifyTrades !== undefined && document.getElementById('notify-trades')) document.getElementById('notify-trades').checked = config.notifyTrades;
+    if (config.notifyAnalysis !== undefined && document.getElementById('notify-analysis')) document.getElementById('notify-analysis').checked = config.notifyAnalysis;
+    if (config.soundAlerts !== undefined && document.getElementById('sound-alerts')) document.getElementById('sound-alerts').checked = config.soundAlerts;
+    if (config.minOrderUsdt) localStorage.setItem('cryptoai-ai-min-order-usdt', config.minOrderUsdt);
+
+    // Bot configs
+    if (config.botAdvancedConfig) {
+      const bc = config.botAdvancedConfig;
+      if (document.getElementById('bot-paper-mode')) document.getElementById('bot-paper-mode').checked = bc.paperMode !== false;
+      if (document.getElementById('bot-multi-symbols')) document.getElementById('bot-multi-symbols').checked = !!bc.multiSymbols;
+      if (document.getElementById('bot-symbol-list') && bc.symbolList) document.getElementById('bot-symbol-list').value = bc.symbolList;
+      if (document.getElementById('bot-interval') && bc.interval) document.getElementById('bot-interval').value = bc.interval;
+      if (document.getElementById('bot-min-confidence') && bc.minConfidence) document.getElementById('bot-min-confidence').value = bc.minConfidence;
+      if (document.getElementById('bot-auto-trade') && bc.autoTrade !== undefined) document.getElementById('bot-auto-trade').checked = bc.autoTrade;
+      if (document.getElementById('bot-require-news-alignment') && bc.requireNewsAlignment !== undefined) document.getElementById('bot-require-news-alignment').checked = bc.requireNewsAlignment;
+      if (document.getElementById('bot-news-continuous') && bc.newsContinuous !== undefined) document.getElementById('bot-news-continuous').checked = bc.newsContinuous;
+    }
+
+    // Trades
+    if (config.trades) { state.trades = config.trades; updateTradesTable(); }
+
+    // AI metrics
+    if (config.aiMetrics) { state.aiMetrics = { ...state.aiMetrics, ...config.aiMetrics }; updateAIMetricsUI(); }
+
+    // Balance
+    if (config.totalBalance !== undefined) {
+      state.totalBalance = toFiniteNumber(config.totalBalance, 0);
+      const balanceEl = document.getElementById('total-balance');
+      if (balanceEl) balanceEl.textContent = formatUsd(state.totalBalance);
+    }
+    if (Array.isArray(config.balanceDetails)) {
+      state.balanceDetails = config.balanceDetails.map(normalizeBalanceItem);
+    }
+
+    // Gateway config
+    if (config.gatewayConfig && Object.keys(config.gatewayConfig).length > 0) {
+      localStorage.setItem('cryptoai-gateway-config', JSON.stringify(config.gatewayConfig));
+      loadGatewayConfig();
+    }
+
+    // AI Learning
+    if (config.aiLearning && Object.keys(config.aiLearning).length > 0) {
+      localStorage.setItem('cryptoai-ai-learning', JSON.stringify(config.aiLearning));
+      state.aiLearning = config.aiLearning;
+      ensureAILearning();
+      updateAILearningUI();
+    }
+
+    // AI Automations
+    if (Array.isArray(config.aiAutomations)) {
+      localStorage.setItem('cryptoai-ai-automations', JSON.stringify(config.aiAutomations));
+      state.aiAutomations = config.aiAutomations;
+      renderAIAutomations();
+      state.aiAutomations.filter(a => a.enabled).forEach(scheduleAIAutomation);
+    }
+
+    // Balance history
+    if (Array.isArray(config.balanceHistory)) {
+      localStorage.setItem('cryptoai-balance-history', JSON.stringify(config.balanceHistory));
+      state.balanceHistory = config.balanceHistory;
+    }
+
+    // Paper trading
+    if (config.paperTrading && Object.keys(config.paperTrading).length > 0) {
+      localStorage.setItem('cryptoai-paper-trading', JSON.stringify(config.paperTrading));
+      state.paperTrading = { ...state.paperTrading, ...config.paperTrading };
+    }
+
+    // AI Chat messages
+    if (Array.isArray(config.aiChatMessages)) {
+      localStorage.setItem('cryptoai-ai-chat-messages', JSON.stringify(config.aiChatMessages));
+      state.aiChatMessages = config.aiChatMessages;
+    }
+
+    // Analysis history
+    if (Array.isArray(config.analysisHistory)) {
+      localStorage.setItem('cryptoai-analysis-history', JSON.stringify(config.analysisHistory));
+      state.analysisHistory = config.analysisHistory;
+    }
+
+    // Model cache
+    if (config.modelCache && Object.keys(config.modelCache).length > 0) {
+      localStorage.setItem('cryptoai-model-cache', JSON.stringify(config.modelCache));
+      restoreCachedAIModels();
+    }
+
+    // Save all configs
+    saveConfig();
+    updateWalletUI(state.activeExchange || 'backup');
+    updatePositionsUI();
+
+    // Apply theme
+    if (config.appTheme) loadSavedTheme();
+
+    // Load balance from connected exchange
+    if (state.activeExchange && state.exchangeConfigs[state.activeExchange]?.apiKey) {
+      setTimeout(() => loadBalance(state.activeExchange), 1000);
+    }
+
+    showToast(`Backup restaurado com sucesso! ${restoredCount} conexão(ões) recuperada(s).`, 'success');
+    addLog('success', `Backup importado: ${restoredCount} conexões, ${Object.keys(config.exchangeConfigs || {}).length} corretoras, ${Object.keys(config.aiConfigs || {}).length} IAs`);
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--accent-green);">✅ Backup restaurado com sucesso! ${restoredCount} conexão(ões).</span>`;
+
+  } catch (err) {
+    showToast('Erro ao importar: ' + err.message, 'error');
+    addLog('error', `Erro na importação: ${err.message}`);
+    const statusEl = document.getElementById('backup-status');
+    if (statusEl) statusEl.innerHTML = `<span style="color:var(--accent-red);">❌ Erro: ${err.message}</span>`;
+  } finally {
+    inputEl.value = '';
+  }
+}
+
 function navigateTo(page) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));

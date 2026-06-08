@@ -4,6 +4,7 @@ const fs = require('fs');
 const https = require('https');
 const { spawn } = require('child_process');
 const axios = require('axios');
+const CryptoJS = require('crypto-js');
 
 // Set AppUserModelID for proper taskbar icon on Windows
 if (process.platform === 'win32') {
@@ -572,6 +573,91 @@ ipcMain.handle('settings:set-allow-background', (e, enabled) => {
     tray = null;
   }
   return { success: true };
+});
+
+// ===== Backup/Restore with Encryption =====
+// Chave de criptografia unica do CryptoAI Investor
+// Este segredo garante que so o app pode criptografar/descriptografar backups
+const BACKUP_MAGIC = 'CRYPTOAI_BACKUP_V1';
+const BACKUP_ENCRYPTION_KEY = 'CryptoAI-2024-Inv3st0r-S3cur3-Backup-K3y!@#';
+const BACKUP_FILE_EXT = '.cryptoai';
+
+function encryptBackupData(data) {
+  try {
+    const jsonStr = JSON.stringify(data);
+    const encrypted = CryptoJS.AES.encrypt(jsonStr, BACKUP_ENCRYPTION_KEY).toString();
+    const signature = CryptoJS.HmacSHA256(jsonStr, BACKUP_ENCRYPTION_KEY).toString();
+    return {
+      magic: BACKUP_MAGIC,
+      version: 1,
+      encrypted: encrypted,
+      signature: signature,
+      createdAt: new Date().toISOString(),
+      app: 'CryptoAI Investor'
+    };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
+function decryptBackupData(backupObj) {
+  try {
+    if (!backupObj || backupObj.magic !== BACKUP_MAGIC) {
+      return { error: 'Arquivo de backup invalido. Use apenas arquivos .cryptoai exportados pelo CryptoAI Investor.' };
+    }
+    if (backupObj.version !== 1) {
+      return { error: `Versao do backup (${backupObj.version}) nao suportada. Atualize o app.` };
+    }
+    const bytes = CryptoJS.AES.decrypt(backupObj.encrypted, BACKUP_ENCRYPTION_KEY);
+    const decryptedStr = bytes.toString(CryptoJS.enc.Utf8);
+    if (!decryptedStr) {
+      return { error: 'Falha ao descriptografar. O arquivo pode estar corrompido ou foi modificado.' };
+    }
+    // Verify signature
+    const expectedSig = CryptoJS.HmacSHA256(decryptedStr, BACKUP_ENCRYPTION_KEY).toString();
+    if (expectedSig !== backupObj.signature) {
+      return { error: 'Assatura do backup invalida. O arquivo foi modificado ou corrompido.' };
+    }
+    return { data: JSON.parse(decryptedStr) };
+  } catch (e) {
+    return { error: `Erro ao descriptografar backup: ${e.message}` };
+  }
+}
+
+ipcMain.handle('backup:export', (e, configData) => {
+  try {
+    const backup = encryptBackupData(configData);
+    if (backup.error) return { success: false, error: backup.error };
+    return { success: true, data: backup, extension: BACKUP_FILE_EXT };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('backup:import', (e, backupData) => {
+  try {
+    const result = decryptBackupData(backupData);
+    if (result.error) return { success: false, error: result.error };
+    return { success: true, data: result.data };
+  } catch (err) {
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle('backup:validate-file', (e, backupData) => {
+  try {
+    if (!backupData || backupData.magic !== BACKUP_MAGIC) {
+      return { valid: false, error: 'Arquivo nao e um backup valido do CryptoAI Investor' };
+    }
+    return {
+      valid: true,
+      version: backupData.version,
+      createdAt: backupData.createdAt,
+      app: backupData.app
+    };
+  } catch (err) {
+    return { valid: false, error: err.message };
+  }
 });
 
 ipcMain.handle('app:quit', () => {

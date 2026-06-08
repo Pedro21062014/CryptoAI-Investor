@@ -58,6 +58,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   botAnalyze: (exchangeConfig, symbol, interval, context) => ipcRenderer.invoke('bot:analyze', exchangeConfig, symbol, interval, context),
   botTestConnection: () => ipcRenderer.invoke('bot:test-connection'),
 
+  // Backup/Restore
+  backupExport: (configData) => ipcRenderer.invoke('backup:export', configData),
+  backupImport: (backupData) => ipcRenderer.invoke('backup:import', backupData),
+  backupValidateFile: (backupData) => ipcRenderer.invoke('backup:validate-file', backupData),
+
   // Events
   onTradeExecuted: (callback) => ipcRenderer.on('trade-executed', (e, data) => callback(data)),
   onAnalysisComplete: (callback) => ipcRenderer.on('analysis-complete', (e, data) => callback(data)),
