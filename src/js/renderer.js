@@ -2255,6 +2255,10 @@ async function runAnalysisCycle() {
   showToast('Analisando mercado...', 'info');
 
   try {
+    // ===== Gerencia posições existentes ANTES de novas compras =====
+    // Isto garante que o bot venda posições lucrativas ou em stop-loss antes de comprar mais
+    await manageExistingPositions();
+
     // Get market data
     const pairs = document.getElementById('monitor-pairs')?.value || 'BTCUSDT';
     const pairList = pairs.split(',').map(p => p.trim());
@@ -2286,12 +2290,12 @@ async function runAnalysisCycle() {
       addLog('warning', `Erro ao carregar sentimento: ${e.message}`);
     }
 
-    // AI Analysis
+    // AI Analysis - inclui contexto do portfólio para a IA decidir sobre SELL
     const aiConfig = { ...state.aiConfigs[state.activeAI], ...state.riskConfig, language: getSelectedLanguage() };
     const analysisResult = await window.electronAPI.aiGetAnalysis(
       aiConfig,
       marketData,
-      { news: newsData, sentiment, learning: getAILearningContext() }
+      { news: newsData, sentiment, learning: getAILearningContext(), portfolio: buildPortfolioContextForAI() }
     );
 
     if (analysisResult.success) {
@@ -3478,6 +3482,200 @@ function isSymbolInPortfolio(symbol) {
   return positions.some(p => p.coin === baseSymbol);
 }
 
+// Retorna a posição real (base asset) do portfólio para um símbolo
+function getRealPositionForSymbol(symbol) {
+  const baseSymbol = symbol.replace('USDT', '');
+  return getRealPortfolioPositions().find(p => p.coin === baseSymbol && !isStableCoinSymbol(p.coin));
+}
+
+// Retorna o saldo livre (free) do ativo base para um símbolo
+function getRealPositionFreeBalance(symbol) {
+  const pos = getRealPositionForSymbol(symbol);
+  if (!pos) return 0;
+  return toFiniteNumber(pos.free || pos.walletBalance || 0, 0);
+}
+
+// Gerencia posições existentes (paper e real) decidindo quando vender
+// Deve ser chamado no início de cada ciclo de análise para garantir saídas proativas
+async function manageExistingPositions() {
+  if (!state.activeExchange || !state.exchangeConfigs[state.activeExchange]) return;
+  const interval = document.getElementById('bot-interval')?.value || '60';
+  const autoTrade = document.getElementById('bot-auto-trade')?.checked || false;
+  if (!autoTrade) return; // só gerencia se auto-trade estiver ativo
+
+  let newsData = [];
+  let sentiment = null;
+  try {
+    newsData = await window.electronAPI.getCryptoNews();
+    sentiment = await window.electronAPI.getMarketSentiment();
+  } catch (e) { /* silencioso */ }
+
+  const context = { news: newsData, sentiment };
+
+  // ===== 1. Gerenciar posições PAPER =====
+  if (state.paperTrading.positions.length > 0) {
+    const paperPositions = [...state.paperTrading.positions];
+    for (const pos of paperPositions) {
+      try {
+        const exitResult = await window.electronAPI.botAnalyzePositionExit(
+          state.exchangeConfigs[state.activeExchange],
+          {
+            symbol: pos.symbol,
+            entryPrice: pos.entryPrice,
+            quantity: pos.quantity,
+            side: pos.side,
+            takeProfit: pos.takeProfit,
+            stopLoss: pos.stopLoss,
+            openedAt: pos.openedAt
+          },
+          interval,
+          context
+        );
+        if (exitResult.success && exitResult.shouldExit) {
+          addLog('success', `[PAPER-EXIT] ${pos.symbol}: ${exitResult.reason} (P&L ${exitResult.pnlPercent.toFixed(2)}%)`);
+          showToast(`Vendendo ${pos.symbol}: ${exitResult.reason}`, 'success');
+          // Fechar posição paper
+          const latestPrice = exitResult.currentPrice || await getLatestPrice(pos.symbol);
+          if (latestPrice > 0) pos.currentPrice = latestPrice;
+          const pnl = calculatePositionPnl(pos);
+          const exitValue = getPaperCurrentPrice(pos) * pos.quantity;
+          state.paperTrading.cash += exitValue;
+          state.paperTrading.realizedPnl += pnl;
+          state.paperTrading.positions = state.paperTrading.positions.filter(p => String(p.id) !== String(pos.id));
+          state.paperTrading.history.unshift({ ...pos, type: 'CLOSE', closedAt: new Date().toISOString(), pnl, reason: exitResult.reason, exitPrice: getPaperCurrentPrice(pos) });
+          savePaperTrading();
+          updatePositionsUI();
+          state.trades.push({ time: new Date(), symbol: pos.symbol, side: 'SELL', price: getPaperCurrentPrice(pos), quantity: pos.quantity, pnl, status: 'paper', reason: exitResult.reason });
+          updateTradesTable();
+          addLog('success', `[PAPER-EXIT] Venda executada: ${pos.symbol} | P&L ${formatUsd(pnl)} | ${exitResult.reason}`);
+        } else if (exitResult.success) {
+          addLog('info', `[PAPER-HOLD] ${pos.symbol}: mantendo posição (P&L ${exitResult.pnlPercent.toFixed(2)}% | sinal técnico ${exitResult.technicalSignal})`);
+        }
+      } catch (e) {
+        addLog('warning', `[PAPER-EXIT] Erro ao analisar ${pos.symbol}: ${e.message}`);
+      }
+    }
+  }
+
+  // ===== 2. Gerenciar posições REAIS =====
+  const realPositions = getRealPortfolioPositions().filter(c => !isStableCoinSymbol(c.coin) && toFiniteNumber(c.free, 0) > 0);
+  for (const pos of realPositions) {
+    const symbol = pos.coin + 'USDT';
+    try {
+      // Verifica se o símbolo é negociado antes de analisar
+      const symbolCheck = await validateSymbolForExecution(state.activeExchange, symbol);
+      if (!symbolCheck.ok) continue;
+
+      const exitResult = await window.electronAPI.botAnalyzePositionExit(
+        state.exchangeConfigs[state.activeExchange],
+        {
+          symbol: symbol,
+          entryPrice: 0, // não conhecemos o preço de entrada real; análise baseia-se em sinais técnicos
+          quantity: pos.free,
+          side: 'BUY',
+          takeProfit: 0,
+          stopLoss: 0,
+          openedAt: null
+        },
+        interval,
+        context
+      );
+
+      if (exitResult.success && exitResult.shouldExit) {
+        // Para posições reais sem entryPrice, exigimos confiança maior (>= 70)
+        const minConfidenceForRealExit = 70;
+        if (exitResult.confidence < minConfidenceForRealExit) {
+          addLog('info', `[REAL-HOLD] ${symbol}: sinal de saída fraco (conf ${exitResult.confidence}% < ${minConfidenceForRealExit}%)`);
+          continue;
+        }
+
+        addLog('success', `[REAL-EXIT] ${symbol}: ${exitResult.reason}`);
+        showToast(`Vendendo ${symbol}: ${exitResult.reason}`, 'success');
+
+        // Construir ordem de SELL usando o saldo real da moeda
+        const sellQuantity = toFiniteNumber(pos.free, 0);
+        if (sellQuantity <= 0) continue;
+
+        const sellOrder = {
+          symbol: symbol,
+          side: 'SELL',
+          type: 'Market',
+          quantity: sellQuantity
+        };
+
+        try {
+          const result = await window.electronAPI.placeOrder(state.exchangeConfigs[state.activeExchange], sellOrder);
+          if (result.success) {
+            const executedQty = result.data?.executedQty || result.normalizedOrder?.quantity || sellQuantity;
+            const executedValue = result.data?.cummulativeQuoteQty || result.normalizedOrder?.estimatedNotional || 0;
+            addLog('success', `[REAL-EXIT] Venda executada: ${executedQty} ${symbol} (${formatUsd(executedValue)}) - ${exitResult.reason}`);
+            showToast(`Venda real executada: ${executedQty} ${symbol}`, 'success');
+            state.trades.push({
+              time: new Date(),
+              symbol: symbol,
+              side: 'SELL',
+              price: exitResult.currentPrice || 'Market',
+              quantity: executedQty,
+              status: 'filled',
+              reason: exitResult.reason
+            });
+            updateTradesTable();
+            saveConfig();
+            setTimeout(() => loadBalance(state.activeExchange), 3000);
+          } else {
+            addLog('error', `[REAL-EXIT] Falha ao vender ${symbol}: ${result.error}`);
+            showToast(`Falha na venda de ${symbol}: ${result.error}`, 'error');
+          }
+        } catch (e) {
+          addLog('error', `[REAL-EXIT] Exceção ao vender ${symbol}: ${e.message}`);
+        }
+      }
+    } catch (e) {
+      addLog('warning', `[REAL-EXIT] Erro ao analisar ${symbol}: ${e.message}`);
+    }
+  }
+}
+
+// Constrói o contexto de portfólio para enviar à IA
+function buildPortfolioContextForAI() {
+  const portfolio = [];
+
+  // Posições reais
+  const realPositions = getRealPortfolioPositions().filter(c => !isStableCoinSymbol(c.coin) && toFiniteNumber(c.walletBalance, 0) > 0);
+  for (const pos of realPositions) {
+    portfolio.push({
+      symbol: pos.coin + 'USDT',
+      coin: pos.coin,
+      quantity: toFiniteNumber(pos.walletBalance, 0),
+      usdValue: toFiniteNumber(pos.usdValue, 0),
+      type: 'real'
+    });
+  }
+
+  // Posições paper
+  for (const pos of state.paperTrading.positions) {
+    const currentPrice = getPaperCurrentPrice(pos);
+    const pnl = calculatePositionPnl(pos);
+    const entryPrice = toFiniteNumber(pos.entryPrice, 0);
+    const pnlPercent = entryPrice > 0 ? ((currentPrice - entryPrice) / entryPrice) * 100 : 0;
+    portfolio.push({
+      symbol: pos.symbol,
+      coin: pos.symbol.replace('USDT', ''),
+      quantity: toFiniteNumber(pos.quantity, 0),
+      entryPrice: entryPrice,
+      currentPrice: currentPrice,
+      usdValue: currentPrice * toFiniteNumber(pos.quantity, 0),
+      pnl: pnl,
+      pnlPercent: pnlPercent,
+      takeProfit: pos.takeProfit,
+      stopLoss: pos.stopLoss,
+      type: 'paper'
+    });
+  }
+
+  return portfolio;
+}
+
 async function executeAITrade(analysis) {
   const exchange = state.activeExchange;
   if (!exchange) return;
@@ -3574,20 +3772,46 @@ async function executeAITrade(analysis) {
   }
 
   let quantity = 0;
-  if (price > 0) {
-    quantity = notional / price;
+
+  // ===== CORREÇÃO CRÍTICA: SELL em spot usa o SALDO REAL da moeda, não notional/price =====
+  // Em spot trading, vender significa liquidar a posição existente do ativo base.
+  // Calcular quantidade como notional/price causaria erros LOT_SIZE e "insufficient balance".
+  if (side === 'SELL' && !paperMode) {
+    const realBalance = getRealPositionFreeBalance(symbol);
+    if (realBalance <= 0) {
+      const reason = `Venda bloqueada: voce nao possui saldo de ${symbol.replace('USDT','')} para vender na corretora.`;
+      updateAutoTradeChecklist({ ...analysis, execution: { ...(analysis.execution || {}), shouldExecute: false, reason } });
+      addLog('warning', `[AUTO-TRADE] ${reason}`);
+      showToast(reason, 'warning');
+      return;
+    }
+    // Usa o saldo real (com leve dedução para margem de comissão 0.2%)
+    const BINANCE_COMMISSION = 0.002;
+    quantity = realBalance * (1 - BINANCE_COMMISSION);
+    addLog('info', `[AUTO-TRADE] SELL real: usando saldo ${realBalance} ${symbol.replace('USDT','')} (após comissão: ${quantity})`);
+  } else if (side === 'SELL' && paperMode) {
+    // Paper: a quantidade será resolvida no bloco paper abaixo (fecha posição existente)
+    quantity = 0; // será sobrescrito
   } else {
-    // fallback conservador se a analise nao trouxe preço
-    quantity = 0.001;
+    // BUY: calcula quantidade a partir do notional e preço
+    if (price > 0) {
+      quantity = notional / price;
+    } else {
+      quantity = 0.001;
+    }
   }
 
   // Ajuste simples de precisão para evitar ordens absurdas em memecoins ou BTC/ETH.
-  if (symbol.includes('SHIB') || symbol.includes('PEPE') || symbol.includes('BONK') || symbol.includes('FLOKI')) quantity = Math.floor(quantity);
-  else if (symbol.includes('BTC')) quantity = Number(quantity.toFixed(6));
-  else if (symbol.includes('ETH') || symbol.includes('BNB')) quantity = Number(quantity.toFixed(5));
-  else quantity = Number(quantity.toFixed(3));
+  if (quantity > 0) {
+    if (symbol.includes('SHIB') || symbol.includes('PEPE') || symbol.includes('BONK') || symbol.includes('FLOKI')) quantity = Math.floor(quantity);
+    else if (symbol.includes('BTC')) quantity = Number(quantity.toFixed(6));
+    else if (symbol.includes('ETH') || symbol.includes('BNB')) quantity = Number(quantity.toFixed(5));
+    else quantity = Number(quantity.toFixed(3));
+  }
 
-  if (!quantity || quantity <= 0) {
+  // Para SELL paper, a quantidade final vem da posição existente (calculada no bloco paper)
+  // Para BUY e SELL real, validamos a quantidade
+  if (side !== 'SELL' && (!quantity || quantity <= 0)) {
     updateAutoTradeChecklist(analysis);
     addLog('warning', '[AUTO-TRADE] Quantidade calculada invalida; ordem cancelada');
     return;
@@ -3597,13 +3821,14 @@ async function executeAITrade(analysis) {
     symbol: symbol,
     side: side,
     type: 'Market',
-    quantity: quantity
+    quantity: quantity || undefined
   };
 
   // Binance BUY MARKET usa quoteOrderQty para garantir mínimo em USDT real
   // mesmo quando o preço da análise está desatualizado.
   if (exchange === 'binance' && side === 'BUY') {
     order.quoteOrderQty = Number(notional.toFixed(8));
+    delete order.quantity; // BUY MARKET com quoteOrderQty não usa quantity
   }
 
   // Binance MARKET rejeita parâmetros extras. Stop/take/price ficam apenas para validação/log,
@@ -5133,6 +5358,10 @@ async function runCryptoBotCycle(force = false) {
     updateDailyPnl();
   }
 
+  // ===== Gerencia posições existentes ANTES de novas compras =====
+  // Isto garante que o bot venda posições lucrativas ou em stop-loss antes de buscar novas oportunidades
+  await manageExistingPositions();
+
   let symbol = document.getElementById('bot-symbol')?.value || 'BTCUSDT';
   if (symbol === 'custom') {
     symbol = document.getElementById('bot-symbol-custom')?.value?.trim()?.toUpperCase() || 'BTCUSDT';
@@ -5218,7 +5447,7 @@ async function runCryptoBotCycle(force = false) {
       );
       if (candleResult.success) marketData[symbol] = candleResult.data;
 
-      aiResult = await window.electronAPI.aiGetAnalysis(aiConfig, marketData, { news: newsData, sentiment, learning: getAILearningContext() });
+      aiResult = await window.electronAPI.aiGetAnalysis(aiConfig, marketData, { news: newsData, sentiment, learning: getAILearningContext(), portfolio: buildPortfolioContextForAI() });
       if (aiResult?.success && aiResult.analysis) {
         aiResult.analysis.execution = {
           shouldExecute: ['BUY', 'SELL'].includes(aiResult.analysis.recommendation) && (aiResult.analysis.confidence || 0) >= minConfidence,

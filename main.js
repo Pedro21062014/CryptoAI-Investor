@@ -530,6 +530,7 @@ ipcMain.handle('risk:validate-trade', async (e, config, trade, portfolio) => ris
 const botHandlers = require('./src/js/bot');
 ipcMain.handle('bot:get-info', async () => botHandlers.getBotInfo());
 ipcMain.handle('bot:analyze', async (e, exchangeConfig, symbol, interval, context) => botHandlers.analyze(exchangeConfig, symbol, interval, context));
+ipcMain.handle('bot:analyze-position-exit', async (e, exchangeConfig, position, interval, context) => botHandlers.analyzePositionExit(exchangeConfig, position, interval, context));
 ipcMain.handle('bot:test-connection', async () => botHandlers.testConnection());
 
 // Window controls

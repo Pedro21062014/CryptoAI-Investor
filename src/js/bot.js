@@ -145,6 +145,29 @@ const indicators = {
       else if (closes[i] < closes[i - 1]) obv -= volumes[i];
     }
     return obv;
+  },
+
+  // Rate of Change (momentum)
+  roc(closes, period = 10) {
+    if (closes.length < period + 1) return null;
+    const current = closes[closes.length - 1];
+    const past = closes[closes.length - 1 - period];
+    if (past === 0) return null;
+    return ((current - past) / past) * 100;
+  },
+
+  // Commodity Channel Index
+  cci(highs, lows, closes, period = 20) {
+    if (closes.length < period) return null;
+    const typicalPrices = [];
+    for (let i = closes.length - period; i < closes.length; i++) {
+      typicalPrices.push((highs[i] + lows[i] + closes[i]) / 3);
+    }
+    const smaTP = typicalPrices.reduce((a, b) => a + b, 0) / period;
+    const meanDeviation = typicalPrices.reduce((sum, tp) => sum + Math.abs(tp - smaTP), 0) / period;
+    const currentTP = (highs[closes.length - 1] + lows[closes.length - 1] + closes[closes.length - 1]) / 3;
+    if (meanDeviation === 0) return 0;
+    return (currentTP - smaTP) / (0.015 * meanDeviation);
   }
 };
 
@@ -295,24 +318,28 @@ function generateSignals(marketData) {
 
   const calculatedIndicators = {};
 
-  // RSI Analysis
+  // RSI Analysis - Sinais SELL mais agressivos para garantir realização de lucro
   const rsiVal = indicators.rsi(closes, 14);
   calculatedIndicators.rsi = rsiVal;
   if (rsiVal !== null) {
     if (rsiVal < 25) signals.push({ type: 'BUY', indicator: 'RSI', reason: `RSI sobrevendido (${rsiVal.toFixed(1)})`, weight: 2 });
     else if (rsiVal < 35) signals.push({ type: 'BUY', indicator: 'RSI', reason: `RSI approaching oversold (${rsiVal.toFixed(1)})`, weight: 1 });
-    else if (rsiVal > 75) signals.push({ type: 'SELL', indicator: 'RSI', reason: `RSI sobrecomprado (${rsiVal.toFixed(1)})`, weight: 2 });
-    else if (rsiVal > 65) signals.push({ type: 'SELL', indicator: 'RSI', reason: `RSI approaching overbought (${rsiVal.toFixed(1)})`, weight: 1 });
+    else if (rsiVal > 70) signals.push({ type: 'SELL', indicator: 'RSI', reason: `RSI sobrecomprado (${rsiVal.toFixed(1)}) - realizar lucro`, weight: 2.5 });
+    else if (rsiVal > 60) signals.push({ type: 'SELL', indicator: 'RSI', reason: `RSI aproximando sobrecomprado (${rsiVal.toFixed(1)})`, weight: 1 });
   }
 
-  // MACD Analysis
+  // MACD Analysis - sinais SELL reforçados
   const macdData = indicators.macd(closes);
   calculatedIndicators.macd = macdData;
   if (macdData && macdData.histogram !== null) {
     if (macdData.histogram > 0 && macdData.macd > macdData.signal) {
       signals.push({ type: 'BUY', indicator: 'MACD', reason: 'MACD acima do sinal (bullish crossover)', weight: 2 });
     } else if (macdData.histogram < 0 && macdData.macd < macdData.signal) {
-      signals.push({ type: 'SELL', indicator: 'MACD', reason: 'MACD abaixo do sinal (bearish crossover)', weight: 2 });
+      signals.push({ type: 'SELL', indicator: 'MACD', reason: 'MACD abaixo do sinal (bearish crossover) - vender', weight: 2.5 });
+    }
+    // Histograma negativo mesmo com MACD positivo = momentum enfraquecendo = SELL fraco
+    if (macdData.histogram < 0 && macdData.macd > 0) {
+      signals.push({ type: 'SELL', indicator: 'MACD', reason: 'Momentum MACD enfraquecendo (histograma negativo)', weight: 1 });
     }
   }
 
@@ -324,14 +351,14 @@ function generateSignals(marketData) {
     if (currentPrice <= bb.lower) {
       signals.push({ type: 'BUY', indicator: 'BB', reason: `Preco na banda inferior BB (${currentPrice.toFixed(2)} <= ${bb.lower.toFixed(2)})`, weight: 1.5 });
     } else if (currentPrice >= bb.upper) {
-      signals.push({ type: 'SELL', indicator: 'BB', reason: `Preco na banda superior BB (${currentPrice.toFixed(2)} >= ${bb.upper.toFixed(2)})`, weight: 1.5 });
+      signals.push({ type: 'SELL', indicator: 'BB', reason: `Preco na banda superior BB (${currentPrice.toFixed(2)} >= ${bb.upper.toFixed(2)}) - vender`, weight: 2 });
     }
     if (bb.bandwidth < 5) {
       signals.push({ type: 'HOLD', indicator: 'BB', reason: `BB Squeeze detectado (bandwidth: ${bb.bandwidth.toFixed(1)}%) - breakout iminente`, weight: 1 });
     }
   }
 
-  // Moving Average Analysis
+  // Moving Average Analysis - death cross mais forte
   const sma20 = indicators.sma(closes, 20);
   const sma50 = indicators.sma(closes, 50);
   calculatedIndicators.sma20 = sma20;
@@ -340,7 +367,7 @@ function generateSignals(marketData) {
     if (sma20 > sma50) {
       signals.push({ type: 'BUY', indicator: 'MA', reason: 'SMA20 acima da SMA50 (golden cross)', weight: 1.5 });
     } else {
-      signals.push({ type: 'SELL', indicator: 'MA', reason: 'SMA20 abaixo da SMA50 (death cross)', weight: 1.5 });
+      signals.push({ type: 'SELL', indicator: 'MA', reason: 'SMA20 abaixo da SMA50 (death cross) - vender', weight: 2 });
     }
   }
 
@@ -353,7 +380,7 @@ function generateSignals(marketData) {
     if (ema12 > ema26) {
       signals.push({ type: 'BUY', indicator: 'EMA', reason: 'EMA12 acima da EMA26 (tendencia de alta)', weight: 1 });
     } else {
-      signals.push({ type: 'SELL', indicator: 'EMA', reason: 'EMA12 abaixo da EMA26 (tendencia de baixa)', weight: 1 });
+      signals.push({ type: 'SELL', indicator: 'EMA', reason: 'EMA12 abaixo da EMA26 (tendencia de baixa) - vender', weight: 1.5 });
     }
   }
 
@@ -363,8 +390,12 @@ function generateSignals(marketData) {
   if (stoch) {
     if (stoch.k < 20 && stoch.d < 20) {
       signals.push({ type: 'BUY', indicator: 'Stoch', reason: `Estocastico sobrevendido (%K=${stoch.k.toFixed(1)}, %D=${stoch.d.toFixed(1)})`, weight: 1.5 });
-    } else if (stoch.k > 80 && stoch.d > 80) {
-      signals.push({ type: 'SELL', indicator: 'Stoch', reason: `Estocastico sobrecomprado (%K=${stoch.k.toFixed(1)}, %D=${stoch.d.toFixed(1)})`, weight: 1.5 });
+    } else if (stoch.k > 75 && stoch.d > 75) {
+      signals.push({ type: 'SELL', indicator: 'Stoch', reason: `Estocastico sobrecomprado (%K=${stoch.k.toFixed(1)}, %D=${stoch.d.toFixed(1)}) - vender`, weight: 1.5 });
+    }
+    // Cross down de %K sobre %D em zona alta = SELL
+    if (stoch.k < stoch.d && stoch.k > 70) {
+      signals.push({ type: 'SELL', indicator: 'Stoch', reason: 'Stochastic bearish crossover em zona alta', weight: 1 });
     }
   }
 
@@ -377,6 +408,22 @@ function generateSignals(marketData) {
     if (atrPct > 5) {
       signals.push({ type: 'HOLD', indicator: 'ATR', reason: `Alta volatilidade (ATR: ${atrPct.toFixed(1)}%) - cautela`, weight: 0.5 });
     }
+  }
+
+  // Rate of Change (momentum) - novo
+  const rocVal = indicators.roc(closes, 10);
+  calculatedIndicators.roc = rocVal;
+  if (rocVal !== null) {
+    if (rocVal > 5) signals.push({ type: 'BUY', indicator: 'ROC', reason: `ROC forte alta (${rocVal.toFixed(2)}%)`, weight: 1 });
+    else if (rocVal < -5) signals.push({ type: 'SELL', indicator: 'ROC', reason: `ROC forte queda (${rocVal.toFixed(2)}%) - vender`, weight: 1.5 });
+  }
+
+  // CCI (Commodity Channel Index) - novo
+  const cciVal = indicators.cci(highs, lows, closes);
+  calculatedIndicators.cci = cciVal;
+  if (cciVal !== null) {
+    if (cciVal < -100) signals.push({ type: 'BUY', indicator: 'CCI', reason: `CCI sobrevendido (${cciVal.toFixed(1)})`, weight: 1 });
+    else if (cciVal > 100) signals.push({ type: 'SELL', indicator: 'CCI', reason: `CCI sobrecomprado (${cciVal.toFixed(1)}) - vender`, weight: 1.5 });
   }
 
   // Volume Analysis
@@ -613,6 +660,132 @@ module.exports = {
 
   analyzeNewsImpact,
   enhanceAnalysisWithNews,
+
+  // Analisa se uma posição existente deve ser fechada (SELL/EXIT)
+  // position: { symbol, entryPrice, quantity, side, takeProfit, stopLoss, openedAt }
+  // Retorna: { shouldExit, reason, confidence, currentPrice, pnlPercent, signals }
+  async analyzePositionExit(exchangeConfig, position, interval = '60', context = {}) {
+    try {
+      if (!position || !position.symbol) {
+        return { success: false, error: 'Posição inválida' };
+      }
+
+      const marketData = await fetchMarketDataForBot(exchangeConfig, position.symbol, interval);
+      if (marketData.error) {
+        return { success: false, error: marketData.error };
+      }
+      if (marketData.closes.length < 30) {
+        return { success: false, error: 'Dados insuficientes para análise de saída' };
+      }
+
+      const result = generateSignals(marketData);
+      const currentPrice = result.currentPrice;
+      const entryPrice = Number(position.entryPrice || position.entry_price || 0);
+      const side = String(position.side || 'BUY').toUpperCase();
+
+      // Calcular P&L percentual
+      let pnlPercent = 0;
+      if (entryPrice > 0) {
+        if (side === 'BUY') {
+          pnlPercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+        } else {
+          pnlPercent = ((entryPrice - currentPrice) / entryPrice) * 100;
+        }
+      }
+
+      const exitReasons = [];
+      let exitScore = 0; // quanto maior, mais forte o sinal de saída
+
+      // 1. Take-profit atingido
+      const takeProfit = Number(position.takeProfit || position.take_profit || 0);
+      if (takeProfit > 0 && side === 'BUY' && currentPrice >= takeProfit) {
+        exitReasons.push(`Take-profit atingido: ${currentPrice} >= ${takeProfit} (+${pnlPercent.toFixed(2)}%)`);
+        exitScore += 50;
+      }
+
+      // 2. Stop-loss atingido
+      const stopLoss = Number(position.stopLoss || position.stop_loss || 0);
+      if (stopLoss > 0 && side === 'BUY' && currentPrice <= stopLoss) {
+        exitReasons.push(`Stop-loss atingido: ${currentPrice} <= ${stopLoss} (${pnlPercent.toFixed(2)}%)`);
+        exitScore += 60;
+      }
+
+      // 3. Realização de lucro: se posição BUY está com +2.5% a +5% e sinais técnicos viraram SELL
+      if (side === 'BUY' && pnlPercent >= 2.5 && result.overall === 'SELL') {
+        exitReasons.push(`Realização de lucro: +${pnlPercent.toFixed(2)}% com sinal técnico SELL (confiança ${result.confidence}%)`);
+        exitScore += 35;
+      }
+
+      // 4. Realização de lucro agressiva: se BUY está com +5% ou mais, vender independente de sinal
+      if (side === 'BUY' && pnlPercent >= 5) {
+        exitReasons.push(`Lucro forte realizado: +${pnlPercent.toFixed(2)}% (acima do target de 5%)`);
+        exitScore += 45;
+      }
+
+      // 5. Stop-loss técnico: se BUY está com -3% ou mais, vender para limitar perda
+      if (side === 'BUY' && pnlPercent <= -3) {
+        exitReasons.push(`Stop-loss técnico: ${pnlPercent.toFixed(2)}% (perda acima de -3%)`);
+        exitScore += 40;
+      }
+
+      // 6. Tendência de baixa confirmada por múltiplos indicadores
+      if (side === 'BUY' && result.trend === 'BAIXA' && result.overall === 'SELL') {
+        exitReasons.push(`Tendência de baixa confirmada: ${result.signals.filter(s => s.type === 'SELL').length} indicadores em SELL`);
+        exitScore += 25;
+      }
+
+      // 7. RSI sobrecomprado + momentum caindo
+      const rsiVal = result.indicators.rsi;
+      const macdData = result.indicators.macd;
+      if (side === 'BUY' && rsiVal > 70 && macdData && macdData.histogram < 0) {
+        exitReasons.push(`RSI sobrecomprado (${rsiVal.toFixed(1)}) + MACD histograma negativo`);
+        exitScore += 20;
+      }
+
+      // 8. Tempo máximo em posição (24h) com lucro mínimo - evitar capital parado
+      const openedAt = position.openedAt || position.opened_at;
+      if (openedAt) {
+        const hoursInPosition = (Date.now() - new Date(openedAt).getTime()) / (1000 * 60 * 60);
+        if (hoursInPosition >= 24 && pnlPercent >= 1) {
+          exitReasons.push(`Posição aberta há ${hoursInPosition.toFixed(1)}h com lucro de ${pnlPercent.toFixed(2)}% - realizar antes de overnight`);
+          exitScore += 15;
+        }
+      }
+
+      // Aplicar filtro de notícias se houver contexto
+      let newsBlock = false;
+      if (context.news && context.news.length) {
+        const newsImpact = analyzeNewsImpact(context.news, context.sentiment || {});
+        if (newsImpact.shouldPauseTrading) {
+          // Em vez de bloquear, forçamos saída em cenários de risco crítico
+          if (newsImpact.criticalRisk) {
+            exitReasons.push(`Risco crítico de notícias detectado - sair imediatamente`);
+            exitScore += 30;
+          }
+        }
+      }
+
+      const shouldExit = exitScore >= 40;
+      const confidence = Math.min(95, Math.round(exitScore + 20));
+
+      return {
+        success: true,
+        shouldExit,
+        reason: exitReasons.length ? exitReasons.join(' | ') : 'Manter posição',
+        confidence,
+        currentPrice,
+        entryPrice,
+        pnlPercent,
+        trend: result.trend,
+        technicalSignal: result.overall,
+        signals: result.signals,
+        exitScore,
+        symbol: position.symbol
+      };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
 
   async testConnection() {
     return {

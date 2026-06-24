@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Bot
   botGetInfo: () => ipcRenderer.invoke('bot:get-info'),
   botAnalyze: (exchangeConfig, symbol, interval, context) => ipcRenderer.invoke('bot:analyze', exchangeConfig, symbol, interval, context),
+  botAnalyzePositionExit: (exchangeConfig, position, interval, context) => ipcRenderer.invoke('bot:analyze-position-exit', exchangeConfig, position, interval, context),
   botTestConnection: () => ipcRenderer.invoke('bot:test-connection'),
 
   // Backup/Restore

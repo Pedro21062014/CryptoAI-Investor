@@ -285,6 +285,13 @@ const SYSTEM_PROMPT = `You are an expert cryptocurrency investment AI analyst. Y
 7. Consider market volatility, volume trends, and macro factors
 8. Provide specific entry/exit price levels when possible
 
+CRITICAL - SELL LOGIC (very important):
+- You MUST recommend SELL when the user already holds a coin that has reached take-profit (+2.5% or more), is showing overbought signals (RSI > 70), or has bearish MACD/stochastic crossovers.
+- You MUST recommend SELL when a held coin is in loss of -3% or more to limit losses (stop-loss).
+- Do NOT always recommend BUY - the bot needs to SELL to realize profits. A BUY-only strategy loses money over time.
+- When the user holds a coin with profit, prefer SELL over BUY to lock in gains.
+- Balance your recommendations: roughly 40% BUY, 40% SELL, 20% HOLD in a healthy market.
+
 IMPORTANT: You can recommend ANY cryptocurrency that you believe will perform well - not just BTC or ETH. Look for opportunities in altcoins, memecoins, DeFi tokens, Layer 2 tokens, AI tokens, and any other crypto asset. If you see a strong signal on a smaller coin with high growth potential, recommend it! Be bold and look beyond the top 10.
 
 You MUST respond in JSON format:
@@ -416,6 +423,23 @@ module.exports = {
       const provider = aiProviders[config.provider];
       if (!provider) return { success: false, error: 'AI provider not supported' };
 
+      // Constrói contexto de portfólio se disponível
+      let portfolioContext = '';
+      if (newsData && newsData.portfolio && Array.isArray(newsData.portfolio) && newsData.portfolio.length > 0) {
+        portfolioContext = `\n\nCURRENT PORTFOLIO (held positions):
+${JSON.stringify(newsData.portfolio, null, 2)}
+
+PORTFOLIO ANALYSIS INSTRUCTIONS:
+- The user ALREADY HOLDS the coins listed above. You should consider recommending SELL for coins that:
+  * Have unrealized profit >= 2.5% (take-profit target reached)
+  * Have unrealized loss <= -3% (stop-loss triggered)
+  * Show overbought RSI (>70) or bearish MACD crossover
+  * Are showing weakness in current market data
+- If a held coin is in profit, RECOMMEND SELL to lock in gains rather than holding indefinitely.
+- The bot needs to SELL to realize profits - do not default to BUY/HOLD when positions are profitable.
+- Prefer recommending SELL on held profitable positions over BUY on new positions.\n`;
+      }
+
       const prompt = `${getLanguageInstruction(config.language)}
 
 Perform a comprehensive crypto investment analysis.
@@ -424,7 +448,7 @@ IMPORTANT: You must scan ALL available cryptocurrency pairs and recommend the BE
 
 MARKET DATA:
 ${JSON.stringify(marketData, null, 2)}
-
+${portfolioContext}
 NEWS, SENTIMENT & LEARNING MEMORY:
 ${JSON.stringify(newsData, null, 2)}
 
@@ -434,6 +458,12 @@ RISK PARAMETERS:
 - Max Risk Level: ${config.maxRiskLevel || 'MEDIUM'}
 - Max Loss: ${config.maxLoss || '5'}%
 - Investment Style: ${config.investmentStyle || 'moderate'}
+
+CRITICAL SELL RULES:
+- If the user holds a coin in profit (>=2.5%), strongly consider SELL to realize gains.
+- If a held coin has RSI > 70 or bearish MACD, recommend SELL.
+- Do NOT default to BUY when profitable positions exist - the bot needs to SELL to make profit.
+- A good trader sells winners and cuts losers; do not just keep buying.
 
 You MUST include a "symbol" field in your response with the specific pair you recommend (e.g., "SOLUSDT", "AVAXUSDT", "DOGEUSDT", "PEPEUSDT", "FETUSDT"). If the market data contains multiple pairs, pick the one with the strongest signal. Be bold - recommend the coin with the best opportunity regardless of market cap.`;
 
