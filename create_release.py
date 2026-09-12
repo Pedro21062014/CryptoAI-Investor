@@ -121,8 +121,12 @@ def main():
     body = f"""## 🚀 CryptoAI Investor {tag_name}
 
 ### Novidades desta versão:
-- Melhorias de performance
-- Correções de bugs
+- 🤖 Bot com motor **CoinMind** (npm: `coinmind`): estratégias dip / momentum / dca
+- 💼 Carteira paper persistente (`~/.coinmind/carteira.json`) e relatório LUCRO ou PERDA
+- 🛡️ Limites duros de risco (máx. por ordem, posição total, perda diária, cooldown)
+- 🔥 Ordens REAIS em Binance / Bybit / OKX com testnet por padrão e `--prever`
+- ⚙️ Configuração pronta de fábrica — não sobrescreve a que você já tem
+- Melhorias de performance e correções de bugs
 - Suporte para Windows e Linux
 
 ### Downloads:

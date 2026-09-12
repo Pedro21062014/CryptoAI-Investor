@@ -1,6 +1,37 @@
 # CryptoAI Investor - Scripts de Build e Release
 
-Este repositório agora inclui scripts automatizados para build e criação de releases no GitHub.
+Este repositório inclui scripts de build/release **e workflows de CI/CD** (GitHub Actions).
+
+## 🤖 Workflows (recomendado)
+
+| Workflow | Arquivo | Quando roda | O que faz |
+|----------|---------|-------------|-----------|
+| `CI` | `.github/workflows/ci.yml` | push na `main` e pull requests | instala deps, roda `npm test` e o bot headless (`npm run bot`) |
+| `Build & Release` | `.github/workflows/release.yml` | tag `v*`, release publicado ou execução manual | testa → compila Windows (NSIS/zip) + Linux (deb) → **anexa os binários ao release da tag** |
+
+Fluxo para publicar uma versão:
+
+```bash
+npm version patch        # ou minor / major — cria a tag vX.Y.Z
+git push --follow-tags   # dispara o workflow Build & Release
+```
+
+Para rodar manualmente: **Actions → Build & Release → Run workflow** (pode informar a tag).
+
+## 🧪 Testar o bot (sem build)
+
+```bash
+npm ci --ignore-scripts   # deps de teste (sem baixar o Electron)
+npm test                  # testes do bot + motor CoinMind
+npm run bot -- --ciclos 40 --capital 1000
+npm run bot -- --info
+```
+
+O motor do bot é o pacote npm [`coinmind`](https://www.npmjs.com/package/coinmind)
+(declarado em `dependencies` e desempacotado do asar em `build.asarUnpack`).
+Estado e configuração ficam em `~/.coinmind/` (`config.json`, `carteira.json`).
+
+## 📜 Scripts locais (sem CI)
 
 ## 📦 Scripts Disponíveis
 

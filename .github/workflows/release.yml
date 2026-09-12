@@ -1,0 +1,163 @@
+name: Build & Release
+
+# Dispara ao subir uma tag vX.Y.Z, ao publicar um release no GitHub
+# ou manualmente pela aba Actions (com uma tag opcional).
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag do release (ex: v1.9.0). Vazio = versão do package.json'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Testes (bot + CoinMind)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Testes automatizados
+        run: npm test
+
+      - name: Bot headless (fumaça)
+        env:
+          COINMIND_DIR: ${{ runner.temp }}/coinmind-release
+        run: npm run bot -- --ciclos 30 --capital 1000 --semente 42
+
+  build:
+    name: Build ${{ matrix.plataforma }}
+    needs: test
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - plataforma: linux
+            os: ubuntu-latest
+            script: build:linux
+          - plataforma: windows
+            os: windows-latest
+            script: build:win
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Build (${{ matrix.script }})
+        run: npm run ${{ matrix.script }} -- --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Listar artefatos gerados
+        shell: bash
+        run: ls -la dist || true
+
+      - name: Enviar artefatos do build
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.plataforma }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.deb
+            dist/*.AppImage
+            dist/*.blockmap
+            dist/latest*.yml
+
+  release:
+    name: Publicar release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Baixar todos os artefatos
+        uses: actions/download-artifact@v4
+        with:
+          path: artefatos
+          merge-multiple: true
+
+      - name: Descobrir a tag
+        id: tag
+        shell: bash
+        run: |
+          TAG="${{ github.event.release.tag_name || github.event.inputs.tag || '' }}"
+          if [ -z "$TAG" ] && [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${{ github.ref_name }}"
+          fi
+          if [ -z "$TAG" ]; then
+            TAG="v$(node -p "require('./package.json').version")"
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Tag do release: $TAG"
+
+      - name: Publicar / atualizar o release com os binários
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          set -e
+          shopt -s nullglob
+          ARQUIVOS=(artefatos/*.exe artefatos/*.deb artefatos/*.zip artefatos/*.AppImage artefatos/*.blockmap artefatos/latest*.yml)
+
+
+          if [ ${#ARQUIVOS[@]} -eq 0 ]; then
+            echo "Nenhum binário encontrado para anexar."
+            exit 0
+          fi
+
+          echo "Anexando ${#ARQUIVOS[@]} arquivo(s) na tag $TAG"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG já existe — anexando/atualizando os binários."
+            gh release upload "$TAG" "${ARQUIVOS[@]}" --clobber
+          else
+            echo "Release $TAG não existe — criando com notas automáticas."
+            gh release create "$TAG" "${ARQUIVOS[@]}" \
+              --title "CryptoAI Investor $TAG" \
+              --generate-notes
+          fi
+
+      - name: Resumo
+        shell: bash
+        run: |
+          echo "### Release ${{ steps.tag.outputs.tag }} publicado ✅" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          ls -la artefatos >> "$GITHUB_STEP_SUMMARY"

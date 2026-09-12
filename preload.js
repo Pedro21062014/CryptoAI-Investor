@@ -59,6 +59,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   botAnalyzePositionExit: (exchangeConfig, position, interval, context) => ipcRenderer.invoke('bot:analyze-position-exit', exchangeConfig, position, interval, context),
   botTestConnection: () => ipcRenderer.invoke('bot:test-connection'),
 
+  // Bot · motor CoinMind (mercado simulado, estratégias, carteira e ordens reais)
+  botCoinMindInfo: () => ipcRenderer.invoke('bot:coinmind-info'),
+  botCoinMindConfig: (opcoes) => ipcRenderer.invoke('bot:coinmind-config', opcoes),
+  botCoinMindConfigAtual: () => ipcRenderer.invoke('bot:coinmind-config-atual'),
+  botCoinMindMercado: (ciclos, semente) => ipcRenderer.invoke('bot:coinmind-mercado', ciclos, semente),
+  botCoinMindAvaliar: (opcoes) => ipcRenderer.invoke('bot:coinmind-avaliar', opcoes),
+  botCoinMindRodar: (opcoes) => ipcRenderer.invoke('bot:coinmind-rodar', opcoes),
+  botCoinMindIniciar: (opcoes) => ipcRenderer.invoke('bot:coinmind-iniciar', opcoes),
+  botCoinMindParar: () => ipcRenderer.invoke('bot:coinmind-parar'),
+  botCoinMindStatus: () => ipcRenderer.invoke('bot:coinmind-status'),
+  botCoinMindCarteira: () => ipcRenderer.invoke('bot:coinmind-carteira'),
+  botCoinMindReiniciarCarteira: (capital) => ipcRenderer.invoke('bot:coinmind-reiniciar-carteira', capital),
+  botCoinMindCorretoras: () => ipcRenderer.invoke('bot:coinmind-corretoras'),
+  botCoinMindPreco: (simbolo, quote, opcoes) => ipcRenderer.invoke('bot:coinmind-preco', simbolo, quote, opcoes),
+  botCoinMindSaldos: (opcoes) => ipcRenderer.invoke('bot:coinmind-saldos', opcoes),
+  botCoinMindOrdem: (opcoes) => ipcRenderer.invoke('bot:coinmind-ordem', opcoes),
+  botCoinMindTestar: () => ipcRenderer.invoke('bot:coinmind-testar'),
+
   // Backup/Restore
   backupExport: (configData) => ipcRenderer.invoke('backup:export', configData),
   backupImport: (backupData) => ipcRenderer.invoke('backup:import', backupData),

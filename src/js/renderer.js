@@ -5142,7 +5142,69 @@ try {
 // Initialize bot page on load
 document.addEventListener('DOMContentLoaded', () => {
   updateBotPageState();
+  detectarMotorCoinMind();
 });
+
+// ===== Motor CoinMind =====
+// O robô que move o bot (pacote npm "coinmind") já vem embutido no app e com a
+// configuração pronta em ~/.coinmind. Se o motor estiver disponível, o bot fica
+// pronto para uso direto — sem tela de instalação.
+async function detectarMotorCoinMind() {
+  try {
+    const info = await window.electronAPI.botGetInfo();
+    if (!info?.installed || !info.engine?.disponivel) return false;
+
+    botState.installed = true;
+    botState.engine = info.engine;
+    botState.botVersion = info.version;
+    localStorage.setItem('cryptoai-bot-installed', 'true');
+
+    const badge = document.getElementById('bot-version-badge');
+    if (badge) badge.textContent = `v${info.version} · ${info.engine.nome} ${info.engine.versao}`;
+
+    updateBotPageState();
+
+    if (typeof addLog === 'function') {
+      addLog('success', `[CryptoBot] Motor ${info.engine.nome} v${info.engine.versao} ativo · modo ${info.engine.modo} · corretora ${info.engine.corretora}`);
+      addLog('info', `[CryptoBot] Estratégia ${info.engine.estrategia.emoji} ${info.engine.estrategia.nome} · config ${info.engine.configPath}`);
+    }
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// Liga o motor CoinMind em modo contínuo (mercado simulado + carteira paper:
+// nada de dinheiro real nesse laço — ordens reais só pelo painel do motor).
+async function iniciarMotorCoinMind() {
+  try {
+    const cicloS = parseInt(document.getElementById('bot-cycle-interval')?.value || 5) || 5;
+    const intervalo = Math.max(500, Math.min(5000, cicloS * 200));
+    const r = await window.electronAPI.botCoinMindIniciar({ intervalo });
+    if (r?.ok) {
+      addLog('success', `[CoinMind] Robô operando em ciclos de ${intervalo}ms (carteira paper)`);
+      if (r.resumo) {
+        addLog('info', `[CoinMind] Patrimônio ${formatUsd(r.resumo.patrimonio)} (${r.resumo.resultadoPct.toFixed(2)}%) · ${r.resumo.operacoes} operações`);
+      }
+    } else if (r?.error) {
+      addLog('warning', `[CoinMind] ${r.error}`);
+    }
+    return r;
+  } catch (e) {
+    addLog('warning', `[CoinMind] Falha ao iniciar o motor: ${e.message}`);
+    return { ok: false, error: e.message };
+  }
+}
+
+async function pararMotorCoinMind() {
+  try {
+    const r = await window.electronAPI.botCoinMindParar();
+    if (r?.ok) addLog('info', '[CoinMind] Robô pausado');
+    return r;
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
 
 function updateBotPageState() {
   const notInstalled = document.getElementById('bot-not-installed');
@@ -5289,6 +5351,9 @@ async function startCryptoBot() {
   showToast('CryptoBot Beta iniciado!', 'success');
   addLog('success', `CryptoBot Beta iniciado no modo: ${botState.mode}`);
 
+  // 🤖 Motor CoinMind junto com o bot: mercado simulado + carteira paper
+  iniciarMotorCoinMind();
+
   // Run first analysis immediately
   runCryptoBotCycle();
 
@@ -5309,6 +5374,7 @@ function stopCryptoBot() {
   updateCryptoBotUI();
   showToast('CryptoBot Beta parado', 'warning');
   addLog('warning', 'CryptoBot Beta parado');
+  pararMotorCoinMind();
 }
 
 function updateCryptoBotUI() {

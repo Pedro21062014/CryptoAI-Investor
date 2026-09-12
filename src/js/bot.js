@@ -1,11 +1,22 @@
 const axios = require('axios');
 const crypto = require('crypto');
+const coinmind = require('./coinmind-engine');
 
 // ===== CryptoBot Engine - Specialized Crypto Trading Bot =====
-// Implements technical analysis algorithms for automated crypto trading
+// Implementa algoritmos de análise técnica para trading automatizado de cripto.
+//
+// 🤖 v2.0: o motor do robô agora é o CoinMind (pacote npm "coinmind"):
+//    · estratégias dip 🎣 / momentum 🏃 / dca 🕰️ decidindo junto com a análise técnica
+//    · mercado simulado + carteira paper persistente e limites duros de risco
+//    · ordens REAIS em Binance / Bybit / OKX (testnet por padrão)
+//    A configuração já vem pronta em ~/.coinmind/config.json (não sobrescreve a sua).
 
-const BOT_VERSION = '1.0.0-beta';
-const BOT_SIZE_MB = 687; // Simulated installation size in MB
+const BOT_VERSION = '2.0.0';
+const BOT_SIZE_MB = 4; // motor CoinMind é um pacote pequeno, sem dependências
+const BOT_ENGINE = 'coinmind';
+
+/** Limita um número entre mínimo e máximo. */
+const clamp = (valor, min, max) => Math.min(max, Math.max(min, Number(valor) || 0));
 
 // Technical Indicator Calculations
 const indicators = {
@@ -567,13 +578,16 @@ async function fetchMarketDataForBot(exchangeConfig, symbol, interval = '60') {
 module.exports = {
   BOT_VERSION,
   BOT_SIZE_MB,
+  BOT_ENGINE,
 
   async getBotInfo() {
-    return {
+    const base = {
       version: BOT_VERSION,
       sizeMB: BOT_SIZE_MB,
-      name: 'CryptoBot Beta',
-      description: 'Bot especializado em criptomoedas com analise tecnica avancada',
+      name: 'CryptoBot + CoinMind',
+      engine: BOT_ENGINE,
+      description:
+        'Bot especializado em criptomoedas: analise tecnica avancada + motor CoinMind (estrategias, carteira e ordens reais)',
       capabilities: [
         'RSI - Indice de Forca Relativa',
         'MACD - Convergencia/Divergencia de Medias Moveis',
@@ -586,10 +600,24 @@ module.exports = {
         'Deteccao de Squeeze e Breakout',
         'Analise de Volume Anomalico',
         'Identificacao de Golden Cross / Death Cross',
-        'Avaliacao de Risco por Volatilidade'
-      ],
-      installed: false
+        'Avaliacao de Risco por Volatilidade',
+        'CoinMind: estrategias dip / momentum / dca',
+        'CoinMind: carteira paper persistente + relatorio LUCRO ou PERDA',
+        'CoinMind: limites duros de risco (ordem, posicao, perda diaria, cooldown)',
+        'CoinMind: ordens REAIS em Binance, Bybit e OKX (testnet por padrao)'
+      ]
     };
+
+    try {
+      const engine = await coinmind.info();
+      return { ...base, installed: true, engine };
+    } catch (err) {
+      return {
+        ...base,
+        installed: false,
+        engine: { disponivel: false, engine: BOT_ENGINE, erro: err.message }
+      };
+    }
   },
 
   async analyze(exchangeConfig, symbol, interval, context = {}) {
@@ -632,8 +660,58 @@ module.exports = {
         sentiment: result.trend === 'ALTA' ? 'bullish' : result.trend === 'BAIXA' ? 'bearish' : 'neutral',
         trend: result.trend,
         symbol: symbol,
-        source: 'CryptoBot Beta'
+        source: 'CryptoBot + CoinMind'
       };
+
+      // ===== 🤖 Parecer do motor CoinMind (estratégia salva) sobre as velas reais =====
+      let coinmindSignal = null;
+      try {
+        coinmindSignal = await coinmind.avaliarSerie({
+          simbolo: symbol,
+          precos: marketData.closes,
+          posicao: context.position || context.posicao || null,
+          estrategia: context.coinmindStrategy || context.estrategia,
+          cfg: context.coinmindCfg || context.cfg,
+          tickCount: marketData.closes.length
+        });
+      } catch (engineErr) {
+        coinmindSignal = { disponivel: false, engine: BOT_ENGINE, erro: engineErr.message };
+      }
+
+      if (coinmindSignal && coinmindSignal.avaliado) {
+        const acao = coinmindSignal.acao; // 'compra' | 'venda' | null
+        const alinhado =
+          (acao === 'compra' && baseAnalysis.recommendation === 'BUY') ||
+          (acao === 'venda' && baseAnalysis.recommendation === 'SELL');
+        const conflito =
+          (acao === 'compra' && baseAnalysis.recommendation === 'SELL') ||
+          (acao === 'venda' && baseAnalysis.recommendation === 'BUY');
+
+        if (alinhado) baseAnalysis.confidence = clamp(Number(baseAnalysis.confidence) + 6, 5, 97);
+        if (conflito) baseAnalysis.confidence = clamp(Number(baseAnalysis.confidence) - 5, 5, 97);
+
+        const rotulo = `${coinmindSignal.emoji} CoinMind ${coinmindSignal.estrategia}`;
+        baseAnalysis.factors = [
+          ...(baseAnalysis.factors || []),
+          `${rotulo}: ${acao ? (acao === 'compra' ? 'COMPRA' : 'VENDA') : 'sem gatilho'} — ${coinmindSignal.motivo}`,
+          `${rotulo}: desconto de ${coinmindSignal.descontoDaMaximaPct.toFixed(2)}% da maxima recente`
+        ];
+        baseAnalysis.coinmind = {
+          engine: BOT_ENGINE,
+          versao: coinmindSignal.versao,
+          estrategia: coinmindSignal.estrategia,
+          estrategiaNome: coinmindSignal.estrategiaNome,
+          acao,
+          motivo: coinmindSignal.motivo,
+          alinhado,
+          conflito,
+          descontoDaMaximaPct: coinmindSignal.descontoDaMaximaPct,
+          retornoPosicaoPct: coinmindSignal.retornoPosicaoPct,
+          parametros: coinmindSignal.parametros
+        };
+      } else if (coinmindSignal) {
+        baseAnalysis.coinmind = { engine: BOT_ENGINE, erro: coinmindSignal.erro || coinmindSignal.motivo };
+      }
 
       const analysis = enhanceAnalysisWithNews(
         baseAnalysis,
@@ -645,13 +723,24 @@ module.exports = {
         }
       );
 
+      if (analysis.execution && baseAnalysis.coinmind && baseAnalysis.coinmind.acao) {
+        analysis.execution.coinmindAligned =
+          (baseAnalysis.coinmind.acao === 'compra' && analysis.recommendation === 'BUY') ||
+          (baseAnalysis.coinmind.acao === 'venda' && analysis.recommendation === 'SELL');
+      }
+
       return {
         success: true,
         analysis,
         indicators: result.indicators,
         signals: result.signals,
+        coinmind: coinmindSignal,
         marketIntel: analysis.market_intel,
-        raw: JSON.stringify({ ...result, marketIntel: analysis.market_intel, execution: analysis.execution }, null, 2)
+        raw: JSON.stringify(
+          { ...result, coinmind: coinmindSignal, marketIntel: analysis.market_intel, execution: analysis.execution },
+          null,
+          2
+        )
       };
     } catch (err) {
       return { success: false, error: err.message };
@@ -765,8 +854,32 @@ module.exports = {
         }
       }
 
+      // 9. 🤖 Parecer do CoinMind: a estratégia salva (dip/momentum/dca) roda sobre
+      //    as mesmas velas reais. Saída sugerida = motivo forte para fechar.
+      let coinmindSignal = null;
+      try {
+        coinmindSignal = await coinmind.avaliarSerie({
+          simbolo: position.symbol,
+          precos: marketData.closes,
+          posicao: entryPrice > 0 ? { qtd: Number(position.quantity || 0), precoMedio: entryPrice } : null,
+          estrategia: context.coinmindStrategy || context.estrategia,
+          cfg: context.coinmindCfg || context.cfg,
+          tickCount: marketData.closes.length
+        });
+      } catch (engineErr) {
+        coinmindSignal = { disponivel: false, erro: engineErr.message };
+      }
+
+      if (coinmindSignal && coinmindSignal.avaliado && coinmindSignal.acao === 'venda') {
+        exitReasons.push(`🤖 CoinMind ${coinmindSignal.estrategia}: ${coinmindSignal.motivo}`);
+        exitScore += 30;
+      } else if (coinmindSignal && coinmindSignal.avaliado && coinmindSignal.acao === 'compra' && side === 'BUY') {
+        exitReasons.push(`🤖 CoinMind ${coinmindSignal.estrategia} segue comprador — manter posição`);
+        exitScore -= 10;
+      }
+
       const shouldExit = exitScore >= 40;
-      const confidence = Math.min(95, Math.round(exitScore + 20));
+      const confidence = clamp(Math.round(exitScore + 20), 5, 95);
 
       return {
         success: true,
@@ -780,7 +893,8 @@ module.exports = {
         technicalSignal: result.overall,
         signals: result.signals,
         exitScore,
-        symbol: position.symbol
+        symbol: position.symbol,
+        coinmind: coinmindSignal
       };
     } catch (err) {
       return { success: false, error: err.message };
@@ -788,12 +902,24 @@ module.exports = {
   },
 
   async testConnection() {
-    return {
+    const base = {
       success: true,
-      message: `CryptoBot Beta v${BOT_VERSION} pronto`,
+      message: `CryptoBot v${BOT_VERSION} pronto`,
       version: BOT_VERSION,
-      sizeMB: BOT_SIZE_MB
+      sizeMB: BOT_SIZE_MB,
+      engine: BOT_ENGINE
     };
+    try {
+      const motor = await coinmind.testar();
+      return {
+        ...base,
+        message: `${base.message} · ${motor.mensagem}`,
+        motor,
+        success: true
+      };
+    } catch (err) {
+      return { ...base, success: false, message: `Motor CoinMind indisponível: ${err.message}` };
+    }
   },
 
   // Get supported trading pairs
@@ -806,5 +932,160 @@ module.exports = {
       'SUIUSDT', 'APTUSDT', 'SEIUSDT', 'TIAUSDT', 'JUPUSDT',
       'WIFUSDT', 'PEPEUSDT', 'BONKUSDT', 'FLOKIUSDT', 'RUNEUSDT'
     ];
+  },
+
+  // ==========================================================================
+  //  🤖 API do motor CoinMind — usada pelo app (IPC bot:coinmind-*)
+  //  Toda config/estado vive em ~/.coinmind/ (config.json, carteira.json).
+  // ==========================================================================
+
+  /** Info completa do motor: versão, estratégia, corretoras, moedas, carteira. */
+  async coinmindInfo() {
+    try {
+      return { ok: true, engine: await coinmind.info() };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /**
+   * Configura o motor (corretora, modo, estratégia, capital, chaves de API).
+   * Ex.: { modo: 'testnet', estrategia: 'momentum', capital: 5000 }
+   */
+  async coinmindConfigurar(opcoes = {}) {
+    try {
+      return await coinmind.configurar(opcoes);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Configuração efetiva (o que o bot está usando agora). */
+  async coinmindConfig() {
+    try {
+      return { ok: true, config: await coinmind.lerConfiguracoes() };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Cotações do mercado simulado do CoinMind (ciclos ticks antes de mostrar). */
+  async coinmindMercado(ciclos = 1, semente = null) {
+    try {
+      return await coinmind.mercado(ciclos, semente);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Parecer da estratégia salva sobre uma série real de preços. */
+  async coinmindAvaliar(opcoes = {}) {
+    try {
+      return await coinmind.avaliarSerie(opcoes);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Roda N ciclos no mercado simulado com a carteira paper (relatório completo). */
+  async coinmindRodar(opcoes = {}) {
+    try {
+      return await coinmind.rodar(opcoes);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Liga o modo contínuo (o robô operando sozinho em ciclos). */
+  async coinmindIniciar(opcoes = {}) {
+    try {
+      return await coinmind.iniciar(opcoes);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Desliga o modo contínuo e devolve o último resumo. */
+  coinmindParar() {
+    try {
+      return coinmind.parar();
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Estado atual do robô em modo contínuo. */
+  coinmindStatus() {
+    try {
+      return coinmind.status();
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Carteira paper persistente (posições, operações, P&L). */
+  async coinmindCarteira() {
+    try {
+      return await coinmind.carteiraInfo();
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Zera a carteira paper com um novo capital. */
+  async coinmindReiniciarCarteira(capital = 10000) {
+    try {
+      return await coinmind.reiniciarCarteira(capital);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Corretoras do CoinMind + o que já está configurado (chave mascarada). */
+  async coinmindCorretoras() {
+    try {
+      return await coinmind.corretoras();
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Preço real (público) na corretora configurada — não precisa de chave. */
+  async coinmindPreco(simbolo, quote = 'USDT', opcoes = {}) {
+    try {
+      return await coinmind.precoReal(simbolo, quote, opcoes);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Saldos reais (exige chaves configuradas). */
+  async coinmindSaldos(opcoes = {}) {
+    try {
+      return await coinmind.saldosReais(opcoes);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /**
+   * Ordem REAL a mercado. Segurança em camadas:
+   *   modo testnet por padrão · `prever: true` = dry-run · só envia com confirmar: true
+   */
+  async coinmindOrdem(opcoes = {}) {
+    try {
+      return await coinmind.ordemReal(opcoes);
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  },
+
+  /** Teste ponta a ponta do motor (mercado + estratégia + corretora). */
+  async coinmindTestar() {
+    try {
+      return await coinmind.testar();
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
   }
 };

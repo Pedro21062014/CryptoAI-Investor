@@ -533,6 +533,24 @@ ipcMain.handle('bot:analyze', async (e, exchangeConfig, symbol, interval, contex
 ipcMain.handle('bot:analyze-position-exit', async (e, exchangeConfig, position, interval, context) => botHandlers.analyzePositionExit(exchangeConfig, position, interval, context));
 ipcMain.handle('bot:test-connection', async () => botHandlers.testConnection());
 
+// CoinMind engine handlers (motor do bot — pacote npm "coinmind")
+ipcMain.handle('bot:coinmind-info', async () => botHandlers.coinmindInfo());
+ipcMain.handle('bot:coinmind-config', async (e, opcoes) => botHandlers.coinmindConfigurar(opcoes));
+ipcMain.handle('bot:coinmind-config-atual', async () => botHandlers.coinmindConfig());
+ipcMain.handle('bot:coinmind-mercado', async (e, ciclos, semente) => botHandlers.coinmindMercado(ciclos, semente));
+ipcMain.handle('bot:coinmind-avaliar', async (e, opcoes) => botHandlers.coinmindAvaliar(opcoes));
+ipcMain.handle('bot:coinmind-rodar', async (e, opcoes) => botHandlers.coinmindRodar(opcoes));
+ipcMain.handle('bot:coinmind-iniciar', async (e, opcoes) => botHandlers.coinmindIniciar(opcoes));
+ipcMain.handle('bot:coinmind-parar', async () => botHandlers.coinmindParar());
+ipcMain.handle('bot:coinmind-status', async () => botHandlers.coinmindStatus());
+ipcMain.handle('bot:coinmind-carteira', async () => botHandlers.coinmindCarteira());
+ipcMain.handle('bot:coinmind-reiniciar-carteira', async (e, capital) => botHandlers.coinmindReiniciarCarteira(capital));
+ipcMain.handle('bot:coinmind-corretoras', async () => botHandlers.coinmindCorretoras());
+ipcMain.handle('bot:coinmind-preco', async (e, simbolo, quote, opcoes) => botHandlers.coinmindPreco(simbolo, quote, opcoes));
+ipcMain.handle('bot:coinmind-saldos', async (e, opcoes) => botHandlers.coinmindSaldos(opcoes));
+ipcMain.handle('bot:coinmind-ordem', async (e, opcoes) => botHandlers.coinmindOrdem(opcoes));
+ipcMain.handle('bot:coinmind-testar', async () => botHandlers.coinmindTestar());
+
 // Window controls
 ipcMain.handle('window:minimize', () => mainWindow?.minimize());
 ipcMain.handle('window:maximize', () => {
