@@ -19,6 +19,25 @@ A partir da **v1.9.0** o bot do app usa o [**coinmind**](https://www.npmjs.com/p
 A configuração e o estado ficam em `~/.coinmind/` (`config.json`, `carteira.json`).
 Tudo que o CLI do coinmind sabe fazer continua valendo — o bot só usa a mesma base.
 
+### 🧩 Criar Bot já vem com os padrões da dependência
+
+Ao abrir **Criar Bot**, o modal preenche sozinho tudo o que a dependência define:
+
+- **Estratégia** (`dip` 🎣 por padrão) com os parâmetros padrão: lote US$ 150, queda 5%, lucro-alvo 6%, stop-loss 8%, janela 24
+- **Limites duros de risco**: US$ 25 por ordem, US$ 100 em posições, perda diária de US$ 50 que desliga o robô, cooldown de 300s e a lista de moedas permitidas
+- **Capital paper** (US$ 10.000) e **ciclos por rodada** (40)
+- **Modo** testnet por padrão, com botão *Restaurar padrões* para voltar ao de fábrica
+
+O que você salvar ali vai direto para o `~/.coinmind/config.json` e é o que o robô usa.
+
+### ⚠️ Motor não instalado? O app avisa e instala
+
+Se o pacote `coinmind` não estiver presente (instalação nova, `node_modules`
+limpo, etc.), o app **avisa** — na tela do bot e no próprio modal — e instala
+**na hora** um `npm install coinmind` num diretório próprio do app
+(`<userData>/engine`), com o progresso aparecendo na interface. Depois disso o
+bot já sobe pronto, sem você precisar fazer nada.
+
 ### Testar o motor sem abrir o app
 
 ```bash
@@ -42,6 +61,22 @@ npx coinmind config estrategia dip --lote 120 --queda 5 --lucro 6 --stop 8
 
 > ⚠️ O modo `real` movimenta **dinheiro de verdade**. O app nunca envia ordem real
 > sem confirmação explícita (`confirmar: true`) e começa sempre em testnet.
+
+## 🎨 Ícones do Gateway
+
+Os logos da aba **Gateway** vêm do **[Iconify](https://icon-sets.iconify.design/)**
+(glifo branco sobre o tile colorido de cada canal). As origens e a licença
+de cada um estão em [`src/assets/logos/gateway/ICONES.md`](src/assets/logos/gateway/ICONES.md):
+
+| Canal | Ícone Iconify | Coleção |
+|-------|---------------|---------|
+| Telegram | `simple-icons:telegram` | Simple Icons (CC0) |
+| WhatsApp | `simple-icons:whatsapp` | Simple Icons (CC0) |
+| WeChat | `simple-icons:wechat` | Simple Icons (CC0) |
+| QQ | `simple-icons:tencentqq` | Simple Icons (CC0) |
+| Discord | `simple-icons:discord` | Simple Icons (CC0) |
+| E-mail | `mdi:email` | Material Design Icons (Apache 2.0) |
+| Webhook | `mdi:webhook` | Material Design Icons (Apache 2.0) |
 
 ## 🚀 Features
 

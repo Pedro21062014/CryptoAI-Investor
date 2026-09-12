@@ -534,7 +534,35 @@ ipcMain.handle('bot:analyze-position-exit', async (e, exchangeConfig, position, 
 ipcMain.handle('bot:test-connection', async () => botHandlers.testConnection());
 
 // CoinMind engine handlers (motor do bot — pacote npm "coinmind")
+// O motor pode estar no node_modules do app ou num diretório de instalação
+// sob demanda dentro do userData (quando ele é instalado na hora).
+const coinmindEngine = require('./src/js/coinmind-engine');
+coinmindEngine.definirDirInstalacao(path.join(app.getPath('userData'), 'engine'));
+coinmindEngine.registrarDiretorioDeModulo(
+  path.join(app.getPath('userData'), 'engine', 'node_modules')
+);
+coinmindEngine.registrarDiretorioDeModulo(
+  path.join(app.getAppPath(), 'node_modules')
+);
+if (process.resourcesPath) {
+  coinmindEngine.registrarDiretorioDeModulo(
+    path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules')
+  );
+}
+
 ipcMain.handle('bot:coinmind-info', async () => botHandlers.coinmindInfo());
+ipcMain.handle('bot:coinmind-instalado', async () => botHandlers.coinmindInstalado());
+ipcMain.handle('bot:coinmind-instalar', async (event, opcoes) =>
+  botHandlers.coinmindInstalar({
+    ...(opcoes || {}),
+    onProgress: (linha) => {
+      try {
+        event.sender.send('coinmind:install-progress', linha);
+      } catch { /* janela fechada */ }
+    }
+  })
+);
+ipcMain.handle('bot:coinmind-padroes', async () => botHandlers.coinmindPadroes());
 ipcMain.handle('bot:coinmind-config', async (e, opcoes) => botHandlers.coinmindConfigurar(opcoes));
 ipcMain.handle('bot:coinmind-config-atual', async () => botHandlers.coinmindConfig());
 ipcMain.handle('bot:coinmind-mercado', async (e, ciclos, semente) => botHandlers.coinmindMercado(ciclos, semente));

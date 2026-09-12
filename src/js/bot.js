@@ -944,6 +944,47 @@ module.exports = {
     try {
       return { ok: true, engine: await coinmind.info() };
     } catch (err) {
+      return {
+        ok: false,
+        instalado: false,
+        error: err.message,
+        aviso:
+          'O motor CoinMind (dependência "coinmind") não está instalado. Ele será instalado automaticamente ao criar/iniciar o bot.',
+        dirInstalacao: coinmind.dirMotor(),
+        podeInstalar: true
+      };
+    }
+  },
+
+  /** true/false: o motor já está disponível para uso? */
+  async coinmindInstalado() {
+    try {
+      return { ok: true, instalado: await coinmind.motorInstalado(), dir: coinmind.dirMotor() };
+    } catch (err) {
+      return { ok: false, instalado: false, error: err.message };
+    }
+  },
+
+  /**
+   * Instala o motor (npm install coinmind) — usado quando o pacote não está
+   * presente: o app avisa e instala na hora.
+   */
+  async coinmindInstalar(opcoes = {}) {
+    try {
+      return await coinmind.instalarMotor(opcoes);
+    } catch (err) {
+      return { ok: false, erro: err.message };
+    }
+  },
+
+  /**
+   * Padrões vindos da própria dependência (estratégias, parâmetros de cada uma,
+   * limites de risco, capital e corretoras) para pré-preencher o "Criar Bot".
+   */
+  async coinmindPadroes() {
+    try {
+      return await coinmind.padroes();
+    } catch (err) {
       return { ok: false, error: err.message };
     }
   },

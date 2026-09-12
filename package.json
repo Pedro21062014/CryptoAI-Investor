@@ -1,6 +1,6 @@
 {
   "name": "crypto-ai-investor",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "AI-Powered Crypto Investment Desktop Application (bot com motor CoinMind)",
   "main": "main.js",
   "author": "CryptoAI Investor",
@@ -12,7 +12,7 @@
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
     "build:all": "electron-builder --win --linux",
-    "test": "node --test test/",
+    "test": "node --test test/bot.test.js",
     "bot": "node test/bot-cli.js"
   },
   "build": {

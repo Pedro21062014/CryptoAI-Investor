@@ -35,6 +35,86 @@ test('configuração padrão do bot já vem pronta e é segura (testnet)', async
   assert.ok(fs.existsSync(info.engine.configPath), 'config.json deveria existir');
 });
 
+test('padrões vêm da própria dependência (estratégias, limites e capital)', async () => {
+  const p = await bot.coinmindPadroes();
+  assert.strictEqual(p.ok, true, p.error);
+  assert.strictEqual(p.estrategiaPadrao, 'dip');
+  assert.strictEqual(p.capital, 10000);
+  assert.strictEqual(p.ciclos, 40);
+  assert.strictEqual(p.modoPadrao, 'testnet');
+
+  const ids = p.estrategias.map((e) => e.id).sort();
+  assert.deepStrictEqual(ids, ['dca', 'dip', 'momentum']);
+  assert.ok(p.estrategias.every((e) => e.nome && e.emoji && e.descricao));
+  assert.ok(p.estrategias.every((e) => e.campos.length > 0), 'cada estratégia precisa dos campos para o modal');
+
+  // valores padrão da dependência (é isso que o "Criar Bot" pré-preenche)
+  const dip = p.estrategias.find((e) => e.id === 'dip');
+  assert.strictEqual(dip.parametros.lote, 150);
+  assert.strictEqual(dip.parametros.queda, 0.05);
+  assert.strictEqual(dip.parametros.lucroAlvo, 0.06);
+  assert.strictEqual(dip.parametros.stopLoss, 0.08);
+  assert.strictEqual(dip.parametros.janela, 24);
+  assert.deepStrictEqual(dip.campos.map((c) => c.chave), ['lote', 'queda', 'lucroAlvo', 'stopLoss', 'janela']);
+
+  const momentum = p.estrategias.find((e) => e.id === 'momentum');
+  assert.strictEqual(momentum.parametros.curta, 5);
+  assert.strictEqual(momentum.parametros.longa, 15);
+
+  assert.strictEqual(p.limites.maxOrdem, 25);
+  assert.strictEqual(p.limites.maxPosicao, 100);
+  assert.strictEqual(p.limites.perdaDia, 50);
+  assert.strictEqual(p.limites.cooldown, 300);
+  assert.ok(p.corretoras.some((c) => c.id === 'binance' && c.suportaTestnet));
+});
+
+test('motor instalado: detecta e não reinstala', async () => {
+  const status = await bot.coinmindInstalado();
+  assert.strictEqual(status.ok, true);
+  assert.strictEqual(status.instalado, true);
+
+  const r = await bot.coinmindInstalar();
+  assert.strictEqual(r.ok, true);
+  assert.strictEqual(r.jaInstalado, true, 'com o motor presente não deve reinstalar');
+});
+
+test('quando o motor falta, o app sabe avisar que vai instalar', () => {
+  // Processo limpo (sem o módulo em cache) com o pacote coinmind "escondido":
+  // é o cenário de uma instalação nova, sem a dependência instalada.
+  const { execFileSync } = require('node:child_process');
+  const dirPacote = path.dirname(require.resolve('coinmind/package.json')); // .../node_modules/coinmind
+  const escondido = `${dirPacote}.escondido`;
+
+  fs.renameSync(dirPacote, escondido);
+  let saida = '';
+  try {
+    const script = `
+      const bot = require(${JSON.stringify(require.resolve('../src/js/bot.js'))});
+      (async () => {
+        const status = await bot.coinmindInstalado();
+        const info = await bot.coinmindInfo();
+        const infoBot = await bot.getBotInfo();
+        console.log(JSON.stringify({ status, info, instaladoNoBotInfo: infoBot.installed }));
+      })();
+    `;
+    saida = execFileSync(process.execPath, ['-e', script], {
+      encoding: 'utf8',
+      env: { ...process.env, COINMIND_ENGINE_DIR: '', COINMIND_DIR: `${DIR_TESTE}-sem-motor` }
+    });
+  } finally {
+    fs.renameSync(escondido, dirPacote);
+  }
+
+  const r = JSON.parse(saida.trim().split('\n').pop());
+  assert.strictEqual(r.status.instalado, false, 'sem o pacote, o motor não está instalado');
+  assert.strictEqual(r.info.ok, false);
+  assert.strictEqual(r.info.instalado, false);
+  assert.match(r.info.aviso, /será instalado/i, 'o app precisa avisar que vai instalar o motor');
+  assert.strictEqual(r.info.podeInstalar, true);
+  assert.ok(r.info.dirInstalacao, 'o motor sabe onde se instalar quando faltar');
+  assert.strictEqual(r.instaladoNoBotInfo, false, 'getBotInfo precisa refletir o motor ausente');
+});
+
 test('configurar() troca estratégia, capital e modo — e persiste', async () => {
   const r = await bot.coinmindConfigurar({
     estrategia: 'momentum',

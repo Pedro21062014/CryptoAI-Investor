@@ -4670,18 +4670,22 @@ function renderAIAutomations() {
 }
 
 // ===== Gateway Notifications =====
+// Logos: Iconify (https://icon-sets.iconify.design/) — veja src/assets/logos/gateway/ICONES.md
 const GATEWAY_CHANNELS = [
-  { id: 'telegram', name: 'Telegram', color: '#229ED9', logo: 'assets/logos/gateway/telegram.svg', fields: [{ key: 'botToken', label: 'Bot Token' }, { key: 'chatId', label: 'Chat ID' }] },
-  { id: 'whatsapp', name: 'WhatsApp', color: '#25D366', logo: 'assets/logos/gateway/whatsapp.svg', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'phone', label: 'Número/Grupo' }] },
-  { id: 'wechat', name: 'WeChat', color: '#07C160', logo: 'assets/logos/gateway/wechat.svg', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'roomId', label: 'Room/User ID' }] },
-  { id: 'qq', name: 'QQ', color: '#12B7F5', logo: 'assets/logos/gateway/qq.svg', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'groupId', label: 'Group/User ID' }] },
-  { id: 'discord', name: 'Discord', color: '#5865F2', logo: 'assets/logos/gateway/discord.svg', fields: [{ key: 'webhookUrl', label: 'Webhook URL' }] },
-  { id: 'email', name: 'E-mail', color: '#EA4335', logo: 'assets/logos/gateway/email.svg', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'to', label: 'E-mail destino' }] },
-  { id: 'webhook', name: 'Webhook', color: '#F59E0B', logo: 'assets/logos/gateway/webhook.svg', fields: [{ key: 'webhookUrl', label: 'URL do Webhook' }] }
+  { id: 'telegram', name: 'Telegram', color: '#229ED9', logo: 'assets/logos/gateway/telegram.svg', icone: 'simple-icons:telegram', fields: [{ key: 'botToken', label: 'Bot Token' }, { key: 'chatId', label: 'Chat ID' }] },
+  { id: 'whatsapp', name: 'WhatsApp', color: '#25D366', logo: 'assets/logos/gateway/whatsapp.svg', icone: 'simple-icons:whatsapp', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'phone', label: 'Número/Grupo' }] },
+  { id: 'wechat', name: 'WeChat', color: '#07C160', logo: 'assets/logos/gateway/wechat.svg', icone: 'simple-icons:wechat', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'roomId', label: 'Room/User ID' }] },
+  { id: 'qq', name: 'QQ', color: '#12B7F5', logo: 'assets/logos/gateway/qq.svg', icone: 'simple-icons:tencentqq', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'groupId', label: 'Group/User ID' }] },
+  { id: 'discord', name: 'Discord', color: '#5865F2', logo: 'assets/logos/gateway/discord.svg', icone: 'simple-icons:discord', fields: [{ key: 'webhookUrl', label: 'Webhook URL' }] },
+  { id: 'email', name: 'E-mail', color: '#EA4335', logo: 'assets/logos/gateway/email.svg', icone: 'mdi:email', fields: [{ key: 'webhookUrl', label: 'Webhook/API URL' }, { key: 'to', label: 'E-mail destino' }] },
+  { id: 'webhook', name: 'Webhook', color: '#F59E0B', logo: 'assets/logos/gateway/webhook.svg', icone: 'mdi:webhook', fields: [{ key: 'webhookUrl', label: 'URL do Webhook' }] }
 ];
 
 function gatewayIcon(channel) {
-  return `<div style="width:52px;height:52px;border-radius:16px;background:${channel.color};display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px ${channel.color}44;overflow:hidden;"><img src="${channel.logo}" alt="${channel.name}" style="width:52px;height:52px;display:block;"></div>`;
+  // glifo branco (Iconify) sobre o tile colorido do canal
+  return `<div style="width:52px;height:52px;border-radius:16px;background:${channel.color};display:flex;align-items:center;justify-content:center;box-shadow:0 10px 24px ${channel.color}44;overflow:hidden;">
+    <img src="${channel.logo}" alt="${channel.name}" title="${channel.icone || channel.name}" style="width:30px;height:30px;display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,.25));">
+  </div>`;
 }
 
 function getGatewayConfig() {
@@ -5014,6 +5018,8 @@ function openCreateBotModal() {
   syncCreateBotModalFromCurrent();
   const modal = document.getElementById('create-bot-modal');
   if (modal) modal.style.display = 'flex';
+  // preenche a seção do motor com os padrões da dependência (coinmind)
+  carregarPadroesCoinMind();
 }
 
 function closeCreateBotModal() {
@@ -5072,10 +5078,274 @@ function updateCreateBotSummary() {
   const paper = document.getElementById('create-bot-paper')?.checked ? 'Paper Trading' : 'Modo Real';
   const multi = document.getElementById('create-bot-multi')?.checked ? 'multi-moedas' : 'moeda única';
   const conf = document.getElementById('create-bot-confidence')?.value || 72;
-  summary.innerHTML = `<strong>Resumo:</strong> ${modeName} • ${paper} • ${multi} • confiança mínima ${conf}%`;
+
+  const estrategiaId = document.getElementById('create-bot-engine-estrategia')?.value;
+  const estrategia = coinMindPadroes?.estrategias?.find(e => e.id === estrategiaId);
+  const capital = document.getElementById('create-bot-engine-capital')?.value;
+  const testnet = document.getElementById('create-bot-engine-testnet')?.checked !== false;
+  const motor = botState.motorInstalado
+    ? `${estrategia?.emoji || '🎣'} ${estrategia?.nome || estrategiaId}`
+    : 'motor será instalado';
+
+  summary.innerHTML = `<strong>Resumo:</strong> ${modeName} • ${paper} • ${multi} • confiança mínima ${conf}%<br>
+    <span style="opacity:.85">🤖 CoinMind: ${motor} • capital paper <strong>${formatUsd(Number(capital) || 0)}</strong> • ${testnet ? 'testnet 🧪' : 'REAL 🔥'}</span>`;
 }
 
-function saveCreateBotConfig() {
+// ===== 🤖 Padrões da dependência (CoinMind) no "Criar Bot" =====
+// O modal abre já preenchido com o que a dependência usa por padrão
+// (estratégias dip/momentum/dca, limites de risco, capital e ciclos).
+
+let coinMindPadroes = null;
+
+function formatarPercentual(valor) {
+  const n = Number(valor) || 0;
+  return (n <= 1 ? n * 100 : n).toFixed(0);
+}
+
+function padraoDaEstrategia(id) {
+  const estrategia = coinMindPadroes?.estrategias?.find(e => e.id === id);
+  const salva = botState.coinMindConfig?.estrategia;
+  if (salva && salva.nome === id && salva.cfg) return { ...estrategia?.parametros, ...salva.cfg };
+  return estrategia?.parametros || {};
+}
+
+function renderizarParametrosMotor() {
+  const id = document.getElementById('create-bot-engine-estrategia')?.value || coinMindPadroes?.estrategiaPadrao || 'dip';
+  const estrategia = coinMindPadroes?.estrategias?.find(e => e.id === id);
+  const container = document.getElementById('create-bot-engine-parametros');
+  if (!container || !estrategia) return;
+
+  const cfg = padraoDaEstrategia(id);
+  container.innerHTML = estrategia.campos.map(campo => {
+    const valor = cfg[campo.chave];
+    const ehPercent = campo.tipo === 'percent';
+    const valorExibido = ehPercent
+      ? formatarPercentual(valor)
+      : Array.isArray(valor) ? valor.join(',') : (valor ?? '');
+    const passo = ehPercent || campo.unidade === 'usd' ? '0.1' : '1';
+    return `<div class="form-group">
+      <label>${campo.rotulo}${ehPercent ? ' (%)' : ''}</label>
+      <input type="${campo.tipo === 'text' ? 'text' : 'number'}" step="${passo}"
+             id="create-bot-engine-param-${campo.chave}" value="${valorExibido}">
+    </div>`;
+  }).join('');
+}
+
+function onCoinMindEstrategiaChange() {
+  renderizarParametrosMotor();
+  atualizarDescricaoMotor();
+  updateCreateBotSummary();
+}
+
+function atualizarDescricaoMotor() {
+  const id = document.getElementById('create-bot-engine-estrategia')?.value;
+  const estrategia = coinMindPadroes?.estrategias?.find(e => e.id === id);
+  const info = document.getElementById('create-bot-engine-info');
+  if (info && estrategia) {
+    info.innerHTML = `${estrategia.emoji} <strong>${estrategia.nome}</strong> — ${estrategia.descricao} <span style="opacity:.7">(padrão da dependência coinmind${coinMindPadroes?.versao ? ` v${coinMindPadroes.versao}` : ''})</span>`;
+  }
+}
+
+function preencherConfigMotor(config) {
+  const estrategiaId = config?.estrategia?.nome || coinMindPadroes?.estrategiaPadrao || 'dip';
+  const sel = document.getElementById('create-bot-engine-estrategia');
+  if (sel) sel.value = estrategiaId;
+
+  const bot = { ...(coinMindPadroes || {}), ...(config?.bot || {}) };
+  const set = (id, valor) => { const el = document.getElementById(id); if (el && valor !== undefined && valor !== null) el.value = valor; };
+  const marcar = (id, valor) => { const el = document.getElementById(id); if (el) el.checked = !!valor; };
+
+  set('create-bot-engine-capital', bot.capital ?? coinMindPadroes?.capital ?? 10000);
+  set('create-bot-engine-ciclos', bot.ciclos ?? coinMindPadroes?.ciclos ?? 40);
+
+  const limites = { ...(coinMindPadroes?.limites || {}), ...(bot.limites || {}) };
+  set('create-bot-engine-maxordem', limites.maxOrdem ?? 25);
+  set('create-bot-engine-maxposicao', limites.maxPosicao ?? 100);
+  set('create-bot-engine-perdadia', limites.perdaDia ?? 50);
+  set('create-bot-engine-cooldown', limites.cooldown ?? 300);
+  set('create-bot-engine-moedas', (limites.moedas || ['BTC', 'ETH', 'SOL', 'DOGE']).join(','));
+
+  marcar('create-bot-engine-limites', bot.aplicarLimites !== false);
+  marcar('create-bot-engine-testnet', (config?.modo || coinMindPadroes?.modoPadrao || 'testnet') !== 'real');
+
+  renderizarParametrosMotor();
+  atualizarDescricaoMotor();
+}
+
+function atualizarAvisoMotor(instalado, info) {
+  const aviso = document.getElementById('create-bot-engine-aviso');
+  if (!aviso) return;
+  if (instalado) {
+    aviso.style.display = 'none';
+    return;
+  }
+  const dir = info?.dirInstalacao || info?.dir || '';
+  aviso.style.display = 'block';
+  aviso.innerHTML = `
+    <strong>⚠️ O motor CoinMind (dependência <code>coinmind</code>) ainda não está instalado neste computador.</strong><br>
+    Ao criar/iniciar o bot eu <strong>instalo ele automaticamente agora</strong> (um <code>npm install</code> rápido, sem dependências)
+    ${dir ? `em <code>${dir}</code>` : ''} e já ativo o robô. Você também pode instalar na hora:
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button class="btn btn-sm btn-primary" id="btn-instalar-motor" onclick="instalarMotorCoinMind()">Instalar o motor agora</button>
+      <span id="create-bot-engine-install-status" style="font-size:12px;color:var(--text-muted);"></span>
+    </div>`;
+}
+
+async function carregarPadroesCoinMind() {
+  const infoEl = document.getElementById('create-bot-engine-info');
+  try {
+    const resultado = await window.electronAPI.botCoinMindPadroes();
+    if (resultado?.ok) {
+      coinMindPadroes = resultado;
+      atualizarAvisoMotor(true);
+    } else {
+      // motor ausente: usa os padrões conhecidos da dependência para não abrir vazio
+      coinMindPadroes = coinMindPadroes || null;
+      atualizarAvisoMotor(false, resultado || {});
+      if (infoEl) infoEl.textContent = 'Motor CoinMind ainda não instalado — os campos mostram os padrões da dependência e serão aplicados na instalação.';
+    }
+  } catch (e) {
+    atualizarAvisoMotor(false, { erro: e.message });
+  }
+
+  let config = null;
+  try {
+    const atual = await window.electronAPI.botCoinMindConfigAtual();
+    if (atual?.ok) config = atual.config;
+  } catch (e) { /* configuração nova ainda não existe */ }
+
+  botState.coinMindConfig = config;
+  preencherConfigMotor(config);
+}
+
+function resetCoinMindDefaults() {
+  botState.coinMindConfig = null;
+  preencherConfigMotor(null);
+  showToast('Padrões da dependência CoinMind restaurados', 'info');
+}
+
+/** Lê o formulário do motor e monta a configuração do CoinMind. */
+function coletarConfigCoinMind() {
+  const estrategiaId = document.getElementById('create-bot-engine-estrategia')?.value || 'dip';
+  const estrategia = coinMindPadroes?.estrategias?.find(e => e.id === estrategiaId);
+  const cfg = {};
+
+  (estrategia?.campos || []).forEach(campo => {
+    const bruto = document.getElementById(`create-bot-engine-param-${campo.chave}`)?.value;
+    if (bruto === undefined || bruto === '') return;
+    if (campo.tipo === 'text') cfg[campo.chave] = bruto;
+    else cfg[campo.chave] = campo.tipo === 'percent' ? Number(bruto) / 100 : Number(bruto);
+  });
+
+  const num = (id, padrao) => {
+    const v = Number(document.getElementById(id)?.value);
+    return Number.isFinite(v) ? v : padrao;
+  };
+
+  return {
+    estrategia: estrategiaId,
+    cfg,
+    capital: num('create-bot-engine-capital', 10000),
+    ciclos: num('create-bot-engine-ciclos', 40),
+    limites: {
+      maxOrdem: num('create-bot-engine-maxordem', 25),
+      maxPosicao: num('create-bot-engine-maxposicao', 100),
+      perdaDia: num('create-bot-engine-perdadia', 50),
+      cooldown: num('create-bot-engine-cooldown', 300),
+      moedas: (document.getElementById('create-bot-engine-moedas')?.value || 'BTC,ETH,SOL,DOGE')
+        .split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
+    },
+    aplicarLimites: document.getElementById('create-bot-engine-limites')?.checked !== false,
+    modo: document.getElementById('create-bot-engine-testnet')?.checked === false ? 'real' : 'testnet'
+  };
+}
+
+/** Garante o motor instalado. Se faltar, avisa que vai instalar e instala. */
+async function garantirMotorCoinMind(silencioso = false) {
+  try {
+    const status = await window.electronAPI.botCoinMindInstalado();
+    if (status?.instalado) return true;
+  } catch (e) { /* tenta instalar mesmo assim */ }
+
+  if (!silencioso) {
+    addLog('warning', '[CoinMind] Motor não instalado — instalando agora (npm install coinmind)...');
+    showToast('Motor CoinMind não instalado — vou instalar agora', 'warning');
+  }
+  const resultado = await instalarMotorCoinMind(silencioso);
+  return !!resultado?.ok;
+}
+
+/** Instala o motor com progresso visível (usado pelo aviso e pelo botão). */
+async function instalarMotorCoinMind(silencioso = false) {
+  const statusEl = document.getElementById('create-bot-engine-install-status');
+  const btn = document.getElementById('btn-instalar-motor');
+  if (btn) { btn.disabled = true; btn.textContent = 'Instalando...'; }
+  if (statusEl) statusEl.textContent = 'preparando…';
+
+  const linhas = [];
+  try {
+    if (window.electronAPI.onCoinMindInstallProgress && !botState.engineInstallListener) {
+      botState.engineInstallListener = true;
+      window.electronAPI.onCoinMindInstallProgress((linha) => {
+        const alvo = document.getElementById('create-bot-engine-install-status');
+        if (alvo && linha?.texto) alvo.textContent = `${linha.fase}: ${linha.texto}`.slice(0, 90);
+      });
+    }
+
+    const r = await window.electronAPI.botCoinMindInstalar({});
+    if (r?.ok) {
+      botState.installed = true;
+      botState.motorInstalado = true;
+      localStorage.setItem('cryptoai-bot-installed', 'true');
+      addLog('success', `[CoinMind] ${r.mensagem || 'motor instalado'}${r.dir ? ` em ${r.dir}` : ''}`);
+      if (!silencioso) showToast('Motor CoinMind instalado!', 'success');
+      await detectarMotorCoinMind();
+      await carregarPadroesCoinMind();
+      updateBotPageState();
+      if (statusEl) statusEl.textContent = 'instalado ✅';
+      return r;
+    }
+    const erro = r?.erro || r?.error || 'falha desconhecida';
+    addLog('error', `[CoinMind] Falha ao instalar o motor: ${erro}`);
+    if (!silencioso) showToast(`Falha ao instalar o motor: ${erro}`, 'error');
+    if (statusEl) statusEl.textContent = `erro: ${erro}`.slice(0, 90);
+    return { ok: false, erro };
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `erro: ${e.message}`;
+    addLog('error', `[CoinMind] ${e.message}`);
+    return { ok: false, erro: e.message };
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Instalar o motor agora'; }
+    if (linhas.length) addLog('info', `[CoinMind] npm: ${linhas.slice(-2).join(' · ')}`);
+  }
+}
+
+/** Salva a configuração do motor no ~/.coinmind (estratégia, limites, capital). */
+async function salvarConfigCoinMind() {
+  const escolha = coletarConfigCoinMind();
+  try {
+    const r = await window.electronAPI.botCoinMindConfig({
+      estrategia: escolha.estrategia,
+      cfg: escolha.cfg,
+      capital: escolha.capital,
+      limites: escolha.limites,
+      modo: escolha.modo,
+      reiniciarCarteira: !!document.getElementById('create-bot-engine-reiniciar')?.checked
+    });
+    if (r?.ok) {
+      botState.coinMindConfig = r.config;
+      addLog('success', `[CoinMind] Configuração salva: ${escolha.estrategia} · lote-limites US$ ${escolha.limites.maxOrdem} · modo ${escolha.modo}`);
+    } else if (r?.error) {
+      addLog('warning', `[CoinMind] ${r.error}`);
+    }
+    return r;
+  } catch (e) {
+    addLog('warning', `[CoinMind] ${e.message}`);
+    return { ok: false, error: e.message };
+  }
+}
+
+async function saveCreateBotConfig() {
   const copy = (from, to) => { const a = document.getElementById(from); const b = document.getElementById(to); if (a && b) b.value = a.value; };
   const copyChecked = (from, to) => { const a = document.getElementById(from); const b = document.getElementById(to); if (a && b) b.checked = a.checked; };
   setBotMode(createBotMode, true);
@@ -5092,17 +5362,34 @@ function saveCreateBotConfig() {
   copyChecked('create-bot-news-align', 'bot-require-news-alignment');
   copyChecked('create-bot-autotrade', 'bot-auto-trade');
   handleBotSymbolChange();
-  botState.installed = true;
-  localStorage.setItem('cryptoai-bot-installed', 'true');
+
+  // 🚨 Se a dependência (motor CoinMind) não estiver instalada, avisa que vai instalar — e instala.
+  const motorOk = await garantirMotorCoinMind();
+
+  await salvarConfigCoinMind(); // grava estratégia/limites/capital no ~/.coinmind
+
+  botState.installed = motorOk;
+  if (motorOk) localStorage.setItem('cryptoai-bot-installed', 'true');
   updateBotPageState();
   saveConfig();
-  showToast('Bot criado/configurado com sucesso', 'success');
-  addLog('success', `Bot criado pelo Dashboard: ${createBotMode}`);
+
+  if (motorOk) {
+    showToast('Bot criado/configurado com sucesso', 'success');
+    addLog('success', `Bot criado pelo Dashboard: ${createBotMode}`);
+  } else {
+    showToast('Bot salvo, mas o motor CoinMind não pôde ser instalado', 'error');
+    addLog('error', 'Bot salvo, mas o motor CoinMind não pôde ser instalado — o robô não vai operar até resolver');
+  }
+  return motorOk;
 }
 
 async function createAndStartBot() {
-  saveCreateBotConfig();
+  const motorOk = await saveCreateBotConfig();
   closeCreateBotModal();
+  if (!motorOk) {
+    showToast('Instale o motor CoinMind para iniciar o robô', 'warning');
+    return;
+  }
   if (botState.running) {
     stopCryptoBot();
   }
@@ -5124,7 +5411,11 @@ const botState = {
   interval: null,
   signals: [],
   analysisCount: 0,
-  lastChecklist: null
+  lastChecklist: null,
+  motorInstalado: false, // dependência coinmind (motor) presente?
+  engine: null,
+  coinMindConfig: null,
+  engineInstallListener: false
 };
 
 // Load bot install state from cache
@@ -5150,19 +5441,38 @@ document.addEventListener('DOMContentLoaded', () => {
 // configuração pronta em ~/.coinmind. Se o motor estiver disponível, o bot fica
 // pronto para uso direto — sem tela de instalação.
 async function detectarMotorCoinMind() {
+  const badge = document.getElementById('bot-version-badge');
+  const installBadge = document.getElementById('bot-install-badge');
   try {
     const info = await window.electronAPI.botGetInfo();
-    if (!info?.installed || !info.engine?.disponivel) return false;
+
+    if (!info?.installed || !info.engine?.disponivel) {
+      // Dependência ausente: avisa que o motor será instalado
+      botState.motorInstalado = false;
+      botState.installed = false;
+      if (badge) badge.textContent = `v${info?.version || ''} · motor pendente`;
+      if (installBadge) {
+        installBadge.textContent = 'Motor será instalado';
+        installBadge.className = 'badge warning';
+      }
+      if (typeof addLog === 'function') {
+        addLog('warning', '[CryptoBot] O motor CoinMind (dependência "coinmind") não está instalado — ele será instalado automaticamente quando você criar/iniciar o bot.');
+      }
+      const aviso = document.getElementById('create-bot-engine-aviso');
+      if (aviso) atualizarAvisoMotor(false, info?.engine || {});
+      return false;
+    }
 
     botState.installed = true;
+    botState.motorInstalado = true;
     botState.engine = info.engine;
     botState.botVersion = info.version;
     localStorage.setItem('cryptoai-bot-installed', 'true');
 
-    const badge = document.getElementById('bot-version-badge');
     if (badge) badge.textContent = `v${info.version} · ${info.engine.nome} ${info.engine.versao}`;
 
     updateBotPageState();
+    atualizarAvisoMotor(true);
 
     if (typeof addLog === 'function') {
       addLog('success', `[CryptoBot] Motor ${info.engine.nome} v${info.engine.versao} ativo · modo ${info.engine.modo} · corretora ${info.engine.corretora}`);
@@ -5170,6 +5480,7 @@ async function detectarMotorCoinMind() {
     }
     return true;
   } catch (e) {
+    botState.motorInstalado = false;
     return false;
   }
 }
@@ -5238,14 +5549,32 @@ async function installBot() {
   if (notInstalled) notInstalled.style.display = 'none';
   if (installScreen) installScreen.style.display = 'flex';
 
-  addLog('info', 'Iniciando instalacao do CryptoBot Beta (687 MB)...');
-  showToast('Instalando CryptoBot Beta...', 'info');
+  const jaTemMotor = botState.motorInstalado || (await window.electronAPI.botCoinMindInstalado())?.instalado;
+
+  if (jaTemMotor) {
+    addLog('info', '[CryptoBot] Motor CoinMind já instalado — ativando o bot...');
+    showToast('Motor CoinMind encontrado — ativando o bot', 'info');
+    await new Promise(r => setTimeout(r, 600));
+    if (installScreen) installScreen.style.display = 'none';
+    botState.installed = true;
+    localStorage.setItem('cryptoai-bot-installed', 'true');
+    await detectarMotorCoinMind();
+    updateBotPageState();
+    return;
+  }
+
+  addLog('warning', '[CryptoBot] O motor CoinMind (dependência "coinmind") não está instalado.');
+  addLog('info', '[CryptoBot] Instalando o motor agora — npm install coinmind (pacote pequeno, sem dependências)...');
+  showToast('Motor não instalado — instalando agora...', 'warning');
+
+  // instalação real do motor em paralelo com a animação da tela
+  const instalarPromise = instalarMotorCoinMind(true);
 
   const steps = [
-    { id: 1, duration: 3000, status: 'Baixando motor de analise tecnica...' },
-    { id: 2, duration: 2500, status: 'Carregando indicadores (RSI, MACD, BB, Stoch)...' },
-    { id: 3, duration: 2000, status: 'Inicializando modelos de sinal...' },
-    { id: 4, duration: 1500, status: 'Configurando motor de risco...' },
+    { id: 1, duration: 3000, status: 'Instalando motor CoinMind (npm install coinmind)...' },
+    { id: 2, duration: 2500, status: 'Carregando estratégias dip / momentum / dca...' },
+    { id: 3, duration: 2000, status: 'Inicializando limites de risco e carteira paper...' },
+    { id: 4, duration: 1500, status: 'Configurando corretoras (Binance / Bybit / OKX)...' },
     { id: 5, duration: 1000, status: 'Finalizando instalacao...' }
   ];
 
@@ -5286,16 +5615,26 @@ async function installBot() {
     elapsed += step.duration;
   }
 
-  // Installation complete
-  botState.installed = true;
-  localStorage.setItem('cryptoai-bot-installed', 'true');
+  // Installation complete: confirma o resultado real da instalação do motor
+  const resultado = await instalarPromise;
+  const motorOk = !!resultado?.ok;
 
-  addLog('success', 'CryptoBot Beta instalado com sucesso!');
-  showToast('CryptoBot Beta instalado com sucesso!', 'success');
+  botState.installed = motorOk;
+  botState.motorInstalado = motorOk;
+  if (motorOk) localStorage.setItem('cryptoai-bot-installed', 'true');
+
+  if (motorOk) {
+    addLog('success', `Motor CoinMind pronto${resultado.dir ? ` (${resultado.dir})` : ''} — bot ativo!`);
+    showToast('Motor CoinMind instalado — bot pronto!', 'success');
+  } else {
+    addLog('error', `[CoinMind] Não foi possível instalar o motor: ${resultado?.erro || 'erro desconhecido'}`);
+    showToast('Não foi possível instalar o motor CoinMind', 'error');
+  }
 
   // Transition to main content
   await new Promise(r => setTimeout(r, 1000));
   if (installScreen) installScreen.style.display = 'none';
+  await detectarMotorCoinMind();
   updateBotPageState();
 }
 

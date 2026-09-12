@@ -44,32 +44,67 @@ let ultimoErro = null;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// O app (main.js) registra aqui os diretórios onde procurar o pacote: o motor
+// pode estar no node_modules do app ou num diretório de instalação sob demanda.
+const diretoriosExtras = [];
+let dirInstalacao = null;
+
+/** Registra um node_modules extra para procurar o coinmind (chamado pelo main.js). */
+function registrarDiretorioDeModulo(nodeModules) {
+  if (nodeModules && !diretoriosExtras.includes(nodeModules)) diretoriosExtras.push(nodeModules);
+}
+
+/** Define onde instalar o motor sob demanda (padrão: ~/.cryptoai-investor/engine). */
+function definirDirInstalacao(dir) {
+  if (dir) dirInstalacao = dir;
+}
+
+function dirMotor() {
+  return (
+    dirInstalacao ||
+    process.env.COINMIND_ENGINE_DIR ||
+    path.join(os.homedir(), '.cryptoai-investor', 'engine')
+  );
+}
+
 function dirDados() {
   return process.env.COINMIND_DIR || path.join(os.homedir(), '.coinmind');
 }
 
 async function importarCoinMind(rel) {
+  const candidatos = [null, ...diretoriosExtras, path.join(dirMotor(), 'node_modules')].map((base) =>
+    base ? path.join(base, `${ENGINE_NOME}/${rel}`) : null
+  );
+
+  let erroBare = null;
   try {
     return await import(`${ENGINE_NOME}/${rel}`);
-  } catch (erroBare) {
-    // fallback: caminho absoluto (app empacotado / node_modules local)
-    const candidatos = [
-      path.join(__dirname, '..', '..', 'node_modules', ENGINE_NOME, rel),
-      process.resourcesPath
-        ? path.join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', ENGINE_NOME, rel)
-        : null,
-      process.resourcesPath ? path.join(process.resourcesPath, 'app', 'node_modules', ENGINE_NOME, rel) : null
-    ].filter(Boolean);
-
-    for (const arquivo of candidatos) {
-      try {
-        if (fs.existsSync(arquivo)) return await import(pathToFileURL(arquivo).href);
-      } catch { /* tenta o próximo */ }
-    }
-    throw new Error(
-      `pacote "${ENGINE_NOME}" não encontrado (npm install). Detalhe: ${erroBare.message}`
-    );
+  } catch (erro) {
+    erroBare = erro;
   }
+
+  for (const arquivo of candidatos.filter(Boolean)) {
+    try {
+      if (fs.existsSync(arquivo)) return await import(pathToFileURL(arquivo).href);
+    } catch { /* tenta o próximo */ }
+  }
+  throw new Error(
+    `pacote "${ENGINE_NOME}" não encontrado (npm install). Detalhe: ${erroBare ? erroBare.message : 'sem resolução'}`
+  );
+}
+
+/** Tenta carregar o motor; devolve null se não estiver disponível. */
+async function tentarCarregar() {
+  try {
+    return await carregar();
+  } catch {
+    return null;
+  }
+}
+
+/** true se o motor já está instalado e carregável. */
+async function motorInstalado() {
+  return !!(await tentarCarregar());
 }
 
 /** Carrega (uma vez) todos os módulos do coinmind usados pelo bot. */
@@ -149,6 +184,160 @@ async function lerConfiguracoes() {
   const core = await carregar();
   const conf = garantirConfiguracao(core);
   return { ...conf, bot: { ...BOT_PADRAO, ...(conf.bot || {}) } };
+}
+
+/**
+ * Descrição dos campos de cada estratégia, montada a partir dos parâmetros
+ * padrão da dependência (usada pelo modal Criar Bot para gerar os inputs).
+ */
+const CAMPOS_ESTRATEGIA = {
+  dip: [
+    { chave: 'lote', rotulo: 'Lote (US$ por compra)', tipo: 'number', unidade: 'usd' },
+    { chave: 'queda', rotulo: 'Queda para comprar', tipo: 'percent' },
+    { chave: 'lucroAlvo', rotulo: 'Lucro-alvo', tipo: 'percent' },
+    { chave: 'stopLoss', rotulo: 'Stop-loss', tipo: 'percent' },
+    { chave: 'janela', rotulo: 'Janela de máxima (ciclos)', tipo: 'number' }
+  ],
+  momentum: [
+    { chave: 'lote', rotulo: 'Lote (US$ por compra)', tipo: 'number', unidade: 'usd' },
+    { chave: 'curta', rotulo: 'Média curta', tipo: 'number' },
+    { chave: 'longa', rotulo: 'Média longa', tipo: 'number' }
+  ],
+  dca: [
+    { chave: 'lote', rotulo: 'Lote (US$ por compra)', tipo: 'number', unidade: 'usd' },
+    { chave: 'cadaNCiclos', rotulo: 'Comprar a cada N ciclos', tipo: 'number' },
+    { chave: 'moedas', rotulo: 'Moedas (separadas por vírgula)', tipo: 'text' }
+  ]
+};
+
+/**
+ * Padrões que vêm da própria dependência (coinmind): estratégias, parâmetros de
+ * cada uma, limites de risco e o formato esperado. É o que o modal "Criar Bot"
+ * usa para pré-preencher tudo — assim o bot nasce com o comportamento padrão
+ * da dependência, sem valor mágico inventado pelo app.
+ */
+async function padroes() {
+  const core = await carregar();
+
+  const estrategias = Object.entries(core.ESTRATEGIAS).map(([id, e]) => ({
+    id,
+    nome: e.nome,
+    emoji: e.emoji,
+    descricao: e.desc,
+    parametros: core.configEstrategia(id), // defaults da dependência
+    campos: CAMPOS_ESTRATEGIA[id] || []
+  }));
+
+  return {
+    ok: true,
+    engine: ENGINE_NOME,
+    versao: core.VERSAO,
+    capital: CAPITAL_PADRAO,
+    ciclos: CICLOS_PADRAO,
+    intervalo: INTERVALO_PADRAO,
+    estrategiaPadrao: ESTRATEGIA_PADRAO,
+    estrategias,
+    limites: core.agente.LIMITES_PADRAO,
+    moedas: core.CATALOGO.map((m) => m.simbolo),
+    corretoras: Object.values(core.corretoras.CORRETORAS).map((c) => ({
+      id: c.id,
+      nome: c.nome,
+      suportaTestnet: !!c.suportaTestnet
+    })),
+    modoPadrao: 'testnet'
+  };
+}
+
+// ── instalação sob demanda (quando o pacote não está presente) ──────────────
+
+/**
+ * Instala o motor `coinmind` no diretório do app (npm install num pacote
+ * próprio). Usado pelo aviso "vou instalar o motor" quando ele não existe.
+ * @param {{ onProgress?: (linha: {fase: string, texto: string}) => void }} opcoes
+ */
+async function instalarMotor(opcoes = {}) {
+  const { spawn } = require('node:child_process');
+  const avisar = (fase, texto) => {
+    if (typeof opcoes.onProgress === 'function') opcoes.onProgress({ fase, texto: String(texto) });
+  };
+
+  if (await motorInstalado()) {
+    avisar('pronto', 'motor já instalado');
+    return { ok: true, jaInstalado: true, dir: dirMotor(), mensagem: 'Motor CoinMind já está instalado' };
+  }
+
+  const dir = dirMotor();
+  const pacote = path.join(dir, 'package.json');
+  const depVersao = String((require('../../package.json').dependencies || {})[ENGINE_NOME] || '1.3.0');
+  const versao = opcoes.versao || (depVersao.startsWith('^') ? depVersao : `^${depVersao}`);
+
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      pacote,
+      JSON.stringify(
+        {
+          name: 'cryptoai-investor-engine',
+          version: '1.0.0',
+          private: true,
+          description: 'Motor do bot do CryptoAI Investor (instalado sob demanda)',
+          dependencies: { [ENGINE_NOME]: versao }
+        },
+        null,
+        2
+      ) + '\n'
+    );
+    avisar('preparando', `preparando instalação do motor ${ENGINE_NOME} em ${dir}`);
+  } catch (erro) {
+    return { ok: false, erro: `não foi possível preparar a instalação: ${erro.message}`, dir };
+  }
+
+  const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+  const args = ['install', '--no-audit', '--no-fund', '--loglevel=error'];
+
+  const resultado = await new Promise((resolve) => {
+    let saida = '';
+    let cmd;
+    try {
+      cmd = spawn(npm, args, { cwd: dir, shell: process.platform === 'win32', windowsHide: true });
+    } catch (erro) {
+      return resolve({ codigo: -1, saida: erro.message });
+    }
+    cmd.stdout.on('data', (d) => {
+      const texto = d.toString();
+      saida += texto;
+      texto.split('\n').filter(Boolean).forEach((l) => avisar('instalando', l.trim()));
+    });
+    cmd.stderr.on('data', (d) => {
+      const texto = d.toString();
+      saida += texto;
+      texto.split('\n').filter(Boolean).forEach((l) => avisar('instalando', l.trim()));
+    });
+    cmd.on('error', (erro) => resolve({ codigo: -1, saida: `${saida}\n${erro.message}` }));
+    cmd.on('close', (codigo) => resolve({ codigo, saida }));
+  });
+
+  if (resultado.codigo !== 0) {
+    return {
+      ok: false,
+      dir,
+      erro:
+        resultado.saida.trim().split('\n').slice(-4).join(' ') ||
+        `npm install terminou com código ${resultado.codigo}`
+    };
+  }
+
+  // o motor acabou de chegar: recarrega os módulos desse diretório
+  registrarDiretorioDeModulo(path.join(dir, 'node_modules'));
+  cache = null;
+  carregando = null;
+
+  if (!(await motorInstalado())) {
+    return { ok: false, dir, erro: 'npm install terminou, mas o pacote coinmind não pôde ser carregado' };
+  }
+
+  avisar('pronto', 'motor instalado e carregado');
+  return { ok: true, instalado: true, dir, versao, mensagem: 'Motor CoinMind instalado com sucesso' };
 }
 
 /**
@@ -868,9 +1057,17 @@ module.exports = {
   CICLOS_PADRAO,
   INTERVALO_PADRAO,
   BOT_PADRAO,
+  CAMPOS_ESTRATEGIA,
 
   carregar,
+  tentarCarregar,
+  motorInstalado,
+  instalarMotor,
+  registrarDiretorioDeModulo,
+  definirDirInstalacao,
+  dirMotor,
   dirDados,
+  padroes,
   info,
   configurar,
   lerConfiguracoes,

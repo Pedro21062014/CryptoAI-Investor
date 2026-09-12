@@ -1939,6 +1939,36 @@
             </div>
           </div>
         </div>
+        <!-- Motor CoinMind: padrões vindos da própria dependência -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="card-header">
+            <h3>🤖 Motor CoinMind (padrões da dependência)</h3>
+            <button class="btn btn-sm btn-outline" onclick="resetCoinMindDefaults()">Restaurar padrões</button>
+          </div>
+          <div class="card-body">
+            <div id="create-bot-engine-aviso" style="display:none;margin-bottom:14px;padding:12px;border:1px solid #f59e0b66;border-radius:var(--radius-sm);background:rgba(245,158,11,.12);font-size:13px;color:var(--text-secondary);line-height:1.6;"></div>
+            <p id="create-bot-engine-info" style="color:var(--text-muted);font-size:12px;margin-bottom:12px;">Carregando os padrões do motor…</p>
+            <div class="form-row">
+              <div class="form-group"><label>Estratégia do robô</label><select id="create-bot-engine-estrategia" onchange="onCoinMindEstrategiaChange()"></select></div>
+              <div class="form-group"><label>Capital paper (US$)</label><input type="number" id="create-bot-engine-capital" value="10000" min="100" step="100"></div>
+              <div class="form-group"><label>Ciclos por rodada</label><input type="number" id="create-bot-engine-ciclos" value="40" min="1" max="500"></div>
+            </div>
+            <div id="create-bot-engine-parametros" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:12px;"></div>
+            <div class="form-row">
+              <div class="form-group"><label>Máx. por ordem (US$)</label><input type="number" id="create-bot-engine-maxordem" value="25" min="1"></div>
+              <div class="form-group"><label>Máx. em posições (US$)</label><input type="number" id="create-bot-engine-maxposicao" value="100" min="1"></div>
+              <div class="form-group"><label>Perda diária que desliga (US$)</label><input type="number" id="create-bot-engine-perdadia" value="50" min="1"></div>
+              <div class="form-group"><label>Cooldown entre trades (s)</label><input type="number" id="create-bot-engine-cooldown" value="300" min="0"></div>
+            </div>
+            <div class="form-group"><label>Moedas permitidas (separadas por vírgula)</label><input id="create-bot-engine-moedas" value="BTC,ETH,SOL,DOGE"></div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px;margin-top:10px;">
+              <label class="checkbox-group"><input type="checkbox" id="create-bot-engine-limites" checked> Aplicar os limites duros de risco</label>
+              <label class="checkbox-group"><input type="checkbox" id="create-bot-engine-testnet" checked> Modo testnet (dinheiro de mentira)</label>
+              <label class="checkbox-group"><input type="checkbox" id="create-bot-engine-reiniciar"> Reiniciar a carteira paper com o capital acima</label>
+            </div>
+          </div>
+        </div>
+
         <div id="create-bot-summary" style="padding:12px;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:rgba(255,255,255,.035);font-size:13px;color:var(--text-secondary);">Modo selecionado: Bot</div>
       </div>
       <div style="padding:14px 20px;border-top:1px solid var(--border-color);display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;">

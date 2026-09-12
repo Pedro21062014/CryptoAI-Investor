@@ -61,6 +61,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Bot · motor CoinMind (mercado simulado, estratégias, carteira e ordens reais)
   botCoinMindInfo: () => ipcRenderer.invoke('bot:coinmind-info'),
+  botCoinMindInstalado: () => ipcRenderer.invoke('bot:coinmind-instalado'),
+  botCoinMindInstalar: (opcoes) => ipcRenderer.invoke('bot:coinmind-instalar', opcoes),
+  botCoinMindPadroes: () => ipcRenderer.invoke('bot:coinmind-padroes'),
+  onCoinMindInstallProgress: (callback) => ipcRenderer.on('coinmind:install-progress', (e, linha) => callback(linha)),
   botCoinMindConfig: (opcoes) => ipcRenderer.invoke('bot:coinmind-config', opcoes),
   botCoinMindConfigAtual: () => ipcRenderer.invoke('bot:coinmind-config-atual'),
   botCoinMindMercado: (ciclos, semente) => ipcRenderer.invoke('bot:coinmind-mercado', ciclos, semente),
